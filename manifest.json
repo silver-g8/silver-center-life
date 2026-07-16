@@ -1,0 +1,9 @@
+{
+	"id": "command-center",
+	"name": "Command Center",
+	"version": "0.1.0",
+	"minAppVersion": "1.4.0",
+	"description": "A dashboard view for the vault.",
+	"author": "silver-g8",
+	"isDesktopOnly": false
+}

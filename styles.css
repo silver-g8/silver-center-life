@@ -1,0 +1,88 @@
+.workspace-leaf-content[data-type="command-center-dashboard"] .view-content {
+	padding: 0;
+	background: #0a0a0b;
+}
+
+.cc-root {
+	--cc-bg: #0a0a0b;
+	--cc-text: #ededed;
+	--cc-text-dim: #8a8a8f;
+	--cc-hairline: rgba(255, 255, 255, 0.1);
+	--cc-glass: rgba(255, 255, 255, 0.04);
+	--cc-glass-hover: rgba(255, 255, 255, 0.08);
+
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	box-sizing: border-box;
+	height: 100%;
+	padding: 20px;
+	background: var(--cc-bg);
+	color: var(--cc-text);
+	font-family: Inter, "Inter var", system-ui, ui-sans-serif, "Segoe UI",
+		Roboto, "Noto Sans", Cantarell, Ubuntu, "Helvetica Neue", Arial,
+		sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.cc-card {
+	background: var(--cc-glass);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	border: 1px solid var(--cc-hairline);
+	border-radius: 12px;
+}
+
+.cc-topbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	flex: 0 0 auto;
+	padding: 6px;
+}
+
+/* Scoped under .cc-root so these beat Obsidian's own
+   `button:not(.clickable-icon)` rule in app.css. */
+.cc-root .cc-tab {
+	appearance: none;
+	margin: 0;
+	padding: 8px 16px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	box-shadow: none;
+	color: var(--cc-text-dim);
+	font: inherit;
+	font-weight: 500;
+	letter-spacing: 0.01em;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease,
+		border-color 120ms ease;
+}
+
+.cc-root .cc-tab:hover {
+	background: var(--cc-glass);
+	box-shadow: none;
+	color: var(--cc-text);
+}
+
+.cc-root .cc-tab:focus-visible {
+	outline: 1px solid rgba(255, 255, 255, 0.4);
+	outline-offset: 1px;
+}
+
+.cc-root .cc-tab--active,
+.cc-root .cc-tab--active:hover {
+	background: var(--cc-glass-hover);
+	border-color: var(--cc-hairline);
+	box-shadow: none;
+	color: var(--cc-text);
+}
+
+.cc-panel {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 20px;
+	overflow-y: auto;
+}

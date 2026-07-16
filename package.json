@@ -1,0 +1,26 @@
+{
+	"name": "command-center",
+	"version": "0.1.0",
+	"description": "A dashboard view for the vault.",
+	"main": "main.js",
+	"private": true,
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production"
+	},
+	"license": "MIT",
+	"dependencies": {
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"@types/react": "^18.3.18",
+		"@types/react-dom": "^18.3.5",
+		"builtin-modules": "^4.0.0",
+		"esbuild": "^0.25.0",
+		"obsidian": "latest",
+		"tslib": "^2.8.1",
+		"typescript": "^5.7.2"
+	}
+}
