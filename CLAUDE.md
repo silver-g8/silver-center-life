@@ -51,4 +51,7 @@ Vault: /home/sg8/SilverCenterLife
 - Phase 5a ✅ mit.md persistence + watcher + echo suppression
 - Phase 5b ✅ todos/{tabId}.md + checkbox (wire แล้วเฉพาะ client)
 - todo → MIT ✅ คลิกข้อความ todo = promote ขึ้น front seat (checkbox ยังเป็น toggle) · คลิก todo ที่นั่งอยู่แล้ว = no-op (ไม่ถาม ไม่รีเซ็ต ไม่เขียนไฟล์)
+- Phase 7 ✅ live feeds บน Build tab (HN + Reddit + tweets.md) — src/data-sources/feeds.ts
+  cache 10m TTL + in-flight guard + stale fallback · refresh interval แยกจาก timer 1 วิ · tweets เข้า watcher ตัวเดิม
+  (⏳ ยังค้าง runtime verify ใน Obsidian จริง: เปิด/ปิด view 5 รอบดู interval ไม่งอก + offline stale)
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)
