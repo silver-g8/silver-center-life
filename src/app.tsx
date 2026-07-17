@@ -1,8 +1,18 @@
+import { Notice } from "obsidian";
 import { useEffect, useState } from "react";
 
-const TABS = ["Client", "Build", "Inbox", "Learn", "Inspired"] as const;
+/* `id` is the storage key — phase 5 writes command-center/todos/{id}.md.
+   Renaming a tab must never move a file, so nothing outside this table may
+   read `label`. */
+const TABS = [
+	{ id: "client", label: "Client" },
+	{ id: "build", label: "Build" },
+	{ id: "inbox", label: "Inbox" },
+	{ id: "learn", label: "Learn" },
+	{ id: "inspired", label: "Inspired" },
+] as const;
 
-type TabName = (typeof TABS)[number];
+type TabId = (typeof TABS)[number]["id"];
 
 type Mit = {
 	title: string;
@@ -13,9 +23,10 @@ type Mit = {
 
 type Timer = {
 	totalSec: number;
-	remainingSec: number;
+	startedAt: number;
+	pausedAt: number | null;
+	pausedAccumSec: number;
 	active: boolean;
-	paused: boolean;
 };
 
 const SEED_MIT = {
@@ -24,8 +35,21 @@ const SEED_MIT = {
 	est: 25,
 };
 
+/* The clock's only source of truth is wall time, never a tick count, so a
+   throttled or suspended interval costs re-renders but never drifts. */
+function remainingSecAt(timer: Timer, now: number) {
+	if (!timer.active) return 0;
+
+	const wallSec = (now - timer.startedAt) / 1000;
+	const pausedSec =
+		timer.pausedAccumSec +
+		(timer.pausedAt === null ? 0 : (now - timer.pausedAt) / 1000);
+
+	return Math.max(0, timer.totalSec - (wallSec - pausedSec));
+}
+
 function formatClock(seconds: number) {
-	const safe = Math.max(0, Math.floor(seconds));
+	const safe = Math.max(0, Math.ceil(seconds));
 	const mm = Math.floor(safe / 60);
 	const ss = safe % 60;
 	return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
@@ -43,19 +67,24 @@ function formatStarted(startedAt: number | null) {
 function MitBanner({
 	mit,
 	timer,
+	remainingSec,
 	onPause,
 	onAddFive,
 	onDone,
 }: {
 	mit: Mit;
 	timer: Timer;
+	remainingSec: number;
 	onPause: () => void;
 	onAddFive: () => void;
 	onDone: () => void;
 }) {
-	const status = !timer.active ? "idle" : timer.paused ? "paused" : "running";
-	const elapsed = timer.totalSec - timer.remainingSec;
-	const pct = timer.totalSec > 0 ? (elapsed / timer.totalSec) * 100 : 0;
+	const paused = timer.pausedAt !== null;
+	const status = !timer.active ? "idle" : paused ? "paused" : "running";
+	const pct =
+		timer.totalSec > 0
+			? ((timer.totalSec - remainingSec) / timer.totalSec) * 100
+			: 0;
 
 	return (
 		<header className="cc-mit cc-card">
@@ -91,7 +120,7 @@ function MitBanner({
 
 			<div className="cc-mit__timer">
 				<div className={`cc-mit__clock cc-mit__clock--${status}`}>
-					{formatClock(timer.remainingSec)}
+					{formatClock(remainingSec)}
 				</div>
 
 				<div className="cc-mit__actions">
@@ -100,7 +129,7 @@ function MitBanner({
 						onClick={onPause}
 						disabled={!timer.active}
 					>
-						{timer.paused ? "Resume" : "Pause"}
+						{paused ? "Resume" : "Pause"}
 					</button>
 					<button
 						className="cc-pill"
@@ -122,23 +151,23 @@ function MitBanner({
 	);
 }
 
-function TabPanel({ tab }: { tab: TabName }) {
+function TabPanel({ tab }: { tab: TabId }) {
 	switch (tab) {
-		case "Client":
+		case "client":
 			return <div />;
-		case "Build":
+		case "build":
 			return <div />;
-		case "Inbox":
+		case "inbox":
 			return <div />;
-		case "Learn":
+		case "learn":
 			return <div />;
-		case "Inspired":
+		case "inspired":
 			return <div />;
 	}
 }
 
 export function App() {
-	const [activeTab, setActiveTab] = useState<TabName>("Client");
+	const [activeTab, setActiveTab] = useState<TabId>("client");
 
 	const [mit] = useState<Mit>(() => ({
 		...SEED_MIT,
@@ -147,38 +176,48 @@ export function App() {
 
 	const [timer, setTimer] = useState<Timer>(() => ({
 		totalSec: SEED_MIT.est * 60,
-		remainingSec: SEED_MIT.est * 60,
+		startedAt: Date.now(),
+		pausedAt: null,
+		pausedAccumSec: 0,
 		active: true,
-		paused: false,
 	}));
 
-	useEffect(() => {
-		if (!timer.active || timer.paused) return;
+	const [now, setNow] = useState(() => Date.now());
 
-		const id = window.setInterval(() => {
-			setTimer((t) => {
-				if (t.remainingSec <= 1) {
-					return { ...t, remainingSec: 0, active: false };
-				}
-				return { ...t, remainingSec: t.remainingSec - 1 };
-			});
-		}, 1000);
+	const running = timer.active && timer.pausedAt === null;
+
+	/* Ticks only to force a re-render; the value it writes is read from the
+	   clock, so a missed or late tick self-corrects on the next one. */
+	useEffect(() => {
+		if (!running) return;
+
+		setNow(Date.now());
+		const id = window.setInterval(() => setNow(Date.now()), 1000);
 
 		return () => window.clearInterval(id);
-	}, [timer.active, timer.paused]);
+	}, [running]);
+
+	const remainingSec = remainingSecAt(timer, now);
+
+	useEffect(() => {
+		if (!timer.active || remainingSec > 0) return;
+
+		setTimer((t) => ({ ...t, active: false }));
+		new Notice(`Focus block finished — ${mit.title}`, 0);
+	}, [timer.active, remainingSec, mit.title]);
 
 	return (
 		<div className="cc-root">
 			<nav className="cc-topbar cc-card">
 				{TABS.map((tab) => (
 					<button
-						key={tab}
+						key={tab.id}
 						className={
-							tab === activeTab ? "cc-tab cc-tab--active" : "cc-tab"
+							tab.id === activeTab ? "cc-tab cc-tab--active" : "cc-tab"
 						}
-						onClick={() => setActiveTab(tab)}
+						onClick={() => setActiveTab(tab.id)}
 					>
-						{tab}
+						{tab.label}
 					</button>
 				))}
 			</nav>
@@ -186,19 +225,26 @@ export function App() {
 			<MitBanner
 				mit={mit}
 				timer={timer}
-				onPause={() => setTimer((t) => ({ ...t, paused: !t.paused }))}
+				remainingSec={remainingSec}
+				onPause={() =>
+					setTimer((t) => {
+						if (!t.active) return t;
+						if (t.pausedAt === null) {
+							return { ...t, pausedAt: Date.now() };
+						}
+						return {
+							...t,
+							pausedAt: null,
+							pausedAccumSec:
+								t.pausedAccumSec +
+								(Date.now() - t.pausedAt) / 1000,
+						};
+					})
+				}
 				onAddFive={() =>
-					setTimer((t) => ({
-						...t,
-						remainingSec: Math.min(
-							t.remainingSec + 5 * 60,
-							t.totalSec,
-						),
-					}))
+					setTimer((t) => ({ ...t, totalSec: t.totalSec + 5 * 60 }))
 				}
-				onDone={() =>
-					setTimer((t) => ({ ...t, active: false, remainingSec: 0 }))
-				}
+				onDone={() => setTimer((t) => ({ ...t, active: false }))}
 			/>
 
 			<section className="cc-panel cc-card">
