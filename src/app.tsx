@@ -1,6 +1,7 @@
 import { Notice, TFile } from "obsidian";
 import type { App as ObsidianApp } from "obsidian";
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
 	MIT_PATH,
 	defaultState,
@@ -13,6 +14,18 @@ import {
 	todosPath,
 } from "./persistence";
 import type { Mit, MitState, Timer, TodoItem } from "./persistence";
+import {
+	TWEETS_PATH,
+	fetchHackerNews,
+	fetchReddit,
+	loadTweets,
+} from "./data-sources/feeds";
+import type {
+	FeedResult,
+	HnItem,
+	RedditItem,
+	TweetItem,
+} from "./data-sources/feeds";
 
 /* `id` is the storage key — phase 5 writes command-center/todos/{id}.md.
    Renaming a tab must never move a file, so nothing outside this table may
@@ -210,18 +223,189 @@ function TodoList({
 	);
 }
 
+/* "7m ago" from a fetch timestamp. `now` is the shared clock the timer already
+   drives, so this needs no interval of its own — and a refresh resets fetchedAt
+   every 10 min, so the age is never far off even between clock ticks. */
+function formatAge(fetchedAt: number, now: number): string {
+	if (!fetchedAt) return "";
+
+	const sec = Math.max(0, Math.floor((now - fetchedAt) / 1000));
+	if (sec < 60) return `${sec}s ago`;
+
+	const min = Math.floor(sec / 60);
+	if (min < 60) return `${min}m ago`;
+
+	return `${Math.floor(min / 60)}h ago`;
+}
+
+const openLink = (url: string) => window.open(url, "_blank");
+
+function FeedCard({
+	title,
+	count,
+	age,
+	stale,
+	loading,
+	error,
+	children,
+}: {
+	title: string;
+	count: number;
+	age: string;
+	stale: boolean;
+	loading: boolean;
+	error: string | null;
+	children: ReactNode;
+}) {
+	return (
+		<div className="cc-feed cc-card">
+			<div className="cc-feed__head">
+				<span className="cc-feed__title">{title}</span>
+				<span className="cc-feed__meta">
+					{stale && <span className="cc-feed__badge">stale</span>}
+					<span className="cc-feed__count">{count}</span>
+					{age && <span className="cc-feed__age">{age}</span>}
+				</span>
+			</div>
+
+			<div className="cc-feed__list">
+				{/* Only fall back to a message with nothing to show — a stale
+				    cache still renders its rows, with the badge above. */}
+				{count === 0 && loading ? (
+					<p className="cc-feed__empty">Loading…</p>
+				) : count === 0 && error ? (
+					<p className="cc-feed__empty">Couldn't load — {error}</p>
+				) : count === 0 ? (
+					<p className="cc-feed__empty">Nothing here yet</p>
+				) : (
+					children
+				)}
+			</div>
+		</div>
+	);
+}
+
+function BuildFeeds({
+	hn,
+	reddit,
+	tweets,
+	hnLoading,
+	redditLoading,
+	now,
+}: {
+	hn: FeedResult<HnItem>;
+	reddit: FeedResult<RedditItem>;
+	tweets: TweetItem[];
+	hnLoading: boolean;
+	redditLoading: boolean;
+	now: number;
+}) {
+	return (
+		<div className="cc-feeds">
+			<FeedCard
+				title="Hacker News"
+				count={hn.data.length}
+				age={formatAge(hn.fetchedAt, now)}
+				stale={hn.stale}
+				loading={hnLoading}
+				error={hn.error}
+			>
+				{hn.data.map((it) => (
+					<button
+						key={it.id}
+						className="cc-feed__row"
+						onClick={() => openLink(it.url)}
+					>
+						<span className="cc-feed__row-title">{it.title}</span>
+						<span className="cc-feed__row-sub">
+							{it.score} pts · {it.by}
+						</span>
+					</button>
+				))}
+			</FeedCard>
+
+			<FeedCard
+				title="Reddit"
+				count={reddit.data.length}
+				age={formatAge(reddit.fetchedAt, now)}
+				stale={reddit.stale}
+				loading={redditLoading}
+				error={reddit.error}
+			>
+				{reddit.data.map((it) => (
+					<button
+						key={it.id}
+						className="cc-feed__row"
+						onClick={() => openLink(it.permalink)}
+					>
+						<span className="cc-feed__row-title">{it.title}</span>
+						<span className="cc-feed__row-sub">
+							r/{it.subreddit} · {it.score} · {it.num_comments} comments
+						</span>
+					</button>
+				))}
+			</FeedCard>
+
+			<FeedCard
+				title="Tweets"
+				count={tweets.length}
+				age=""
+				stale={false}
+				loading={false}
+				error={null}
+			>
+				{tweets.map((t, i) => {
+					const href =
+						t.url ??
+						(t.handle
+							? `https://twitter.com/${t.handle.replace(/^@/, "")}`
+							: null);
+
+					return (
+						<button
+							key={i}
+							className="cc-feed__row"
+							onClick={() => href && openLink(href)}
+							disabled={href === null}
+						>
+							<span className="cc-feed__row-title">{t.text}</span>
+							{t.handle && (
+								<span className="cc-feed__row-sub">
+									{t.handle}
+								</span>
+							)}
+						</button>
+					);
+				})}
+			</FeedCard>
+		</div>
+	);
+}
+
 function TabPanel({
 	tab,
 	todos,
 	seatTitle,
 	onToggle,
 	onPromote,
+	hn,
+	reddit,
+	tweets,
+	hnLoading,
+	redditLoading,
+	now,
 }: {
 	tab: TabId;
 	todos: TodoItem[];
 	seatTitle: string | null;
 	onToggle: (item: TodoItem) => void;
 	onPromote: (item: TodoItem) => void;
+	hn: FeedResult<HnItem>;
+	reddit: FeedResult<RedditItem>;
+	tweets: TweetItem[];
+	hnLoading: boolean;
+	redditLoading: boolean;
+	now: number;
 }) {
 	switch (tab) {
 		case "client":
@@ -234,7 +418,16 @@ function TabPanel({
 				/>
 			);
 		case "build":
-			return <div />;
+			return (
+				<BuildFeeds
+					hn={hn}
+					reddit={reddit}
+					tweets={tweets}
+					hnLoading={hnLoading}
+					redditLoading={redditLoading}
+					now={now}
+				/>
+			);
 		case "inbox":
 			return <div />;
 		case "learn":
@@ -252,6 +445,24 @@ export function App({ app }: { app: ObsidianApp }) {
 	const [timer, setTimer] = useState<Timer>(initial.timer);
 
 	const [todos, setTodos] = useState<TodoItem[]>([]);
+
+	/* Build-tab feeds. `error`/`stale`/`fetchedAt` ride inside the FeedResult;
+	   the loading flags are separate because they are UI-only. */
+	const [hn, setHn] = useState<FeedResult<HnItem>>({
+		data: [],
+		fetchedAt: 0,
+		stale: false,
+		error: null,
+	});
+	const [reddit, setReddit] = useState<FeedResult<RedditItem>>({
+		data: [],
+		fetchedAt: 0,
+		stale: false,
+		error: null,
+	});
+	const [hnLoading, setHnLoading] = useState(false);
+	const [redditLoading, setRedditLoading] = useState(false);
+	const [tweets, setTweets] = useState<TweetItem[]>([]);
 
 	const [now, setNow] = useState(() => Date.now());
 	const [hydrated, setHydrated] = useState(false);
@@ -273,14 +484,16 @@ export function App({ app }: { app: ObsidianApp }) {
 		let cancelled = false;
 
 		void (async () => {
-			const [loaded, loadedTodos] = await Promise.all([
+			const [loaded, loadedTodos, loadedTweets] = await Promise.all([
 				loadMIT(app),
 				loadTodos(app, "client"),
+				loadTweets(app),
 			]);
 			if (cancelled) return;
 
 			applyLoaded(loaded);
 			setTodos(loadedTodos);
+			setTweets(loadedTweets);
 			setHydrated(true);
 		})();
 
@@ -316,6 +529,40 @@ export function App({ app }: { app: ObsidianApp }) {
 
 		return () => window.clearInterval(id);
 	}, [running]);
+
+	/* Feeds: fetch once on mount, then refresh every 10 minutes. This is its OWN
+	   interval, separate from the 1-second timer above — it owns a different id
+	   and clears only that id in its cleanup. The two must never be merged: one
+	   ticks per second to move the clock, this one wakes twice an hour to pull
+	   the network, and refresh only refreshes — it writes no vault file. */
+	useEffect(() => {
+		let cancelled = false;
+
+		const refresh = () => {
+			setHnLoading(true);
+			void fetchHackerNews().then((r) => {
+				if (cancelled) return;
+				setHn(r);
+				setHnLoading(false);
+			});
+
+			setRedditLoading(true);
+			void fetchReddit().then((r) => {
+				if (cancelled) return;
+				setReddit(r);
+				setRedditLoading(false);
+			});
+		};
+
+		refresh();
+		const id = window.setInterval(refresh, 10 * 60 * 1000);
+
+		return () => {
+			cancelled = true;
+			window.clearInterval(id);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	/* The seated todo is identified by value, not by reference: the same
 	   (title, project) pair the banner already shows. Nothing new on disk. */
@@ -417,6 +664,13 @@ export function App({ app }: { app: ObsidianApp }) {
 				if (cancelled) return;
 
 				setTodos(fresh);
+			} else if (file.path === TWEETS_PATH) {
+				/* Read-only: no save, so isEcho above never matches (nothing was
+				   ever written for this path) and this simply re-reads. */
+				const fresh = await loadTweets(app);
+				if (cancelled) return;
+
+				setTweets(fresh);
 			}
 		};
 
@@ -509,6 +763,12 @@ export function App({ app }: { app: ObsidianApp }) {
 					seatTitle={seatTitle}
 					onToggle={(item) => void toggleTodo(item)}
 					onPromote={promoteTodo}
+					hn={hn}
+					reddit={reddit}
+					tweets={tweets}
+					hnLoading={hnLoading}
+					redditLoading={redditLoading}
+					now={now}
 				/>
 			</section>
 		</div>
