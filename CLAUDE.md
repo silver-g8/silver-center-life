@@ -39,7 +39,8 @@ Vault: /home/sg8/SilverCenterLife
 
 ## Git / sync — IMPORTANT
 - vault นี้ sync ข้ามเครื่องด้วย git → `main.js` ต้อง commit เข้า git เสมอ
-  ห้ามใส่ .gitignore เด็ดขาด เครื่องปลายทางไม่มี node_modules/ ถ้าไม่มี main.js ปลั๊กอินจะไม่ทำงาน
+  ห้าม ignore main.js เด็ดขาด (.gitignore มีได้ แต่ต้องมีแค่ node_modules/, data.json, .env)
+  เครื่องปลายทางไม่มี node_modules/ ถ้าไม่มี main.js ปลั๊กอินจะไม่ทำงาน
 - **รัน `npm run build` ก่อน commit ทุกครั้ง** เพื่อให้ main.js ใน git เป็น minified เสมอ
   `npm run dev` เขียน main.js เป็น dev build (inline sourcemap ~24k บรรทัด) ถ้า commit ตอนนั้น
   diff จะเด้ง 24k บรรทัดสลับไปมาทุก commit — เลือกวิธีนี้แทนการ gitignore main.js แล้ว (2026-07-16)
