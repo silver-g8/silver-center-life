@@ -49,5 +49,5 @@ Vault: /home/sg8/SilverCenterLife
 - Phase 3 ✅ MIT banner + timer — timestamp-derived แล้ว ไม่ได้นับ tick อีกต่อไป
 - Phase 5a ✅ mit.md persistence + watcher + echo suppression
 - Phase 5b ✅ todos/{tabId}.md + checkbox (wire แล้วเฉพาะ client)
-- todo → MIT ✅ คลิกข้อความ todo = promote ขึ้น front seat (checkbox ยังเป็น toggle)
+- todo → MIT ✅ คลิกข้อความ todo = promote ขึ้น front seat (checkbox ยังเป็น toggle) · คลิก todo ที่นั่งอยู่แล้ว = no-op (ไม่ถาม ไม่รีเซ็ต ไม่เขียนไฟล์)
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)
