@@ -249,3 +249,85 @@
 	padding: 20px;
 	overflow-y: auto;
 }
+
+/* Todos (Client tab) */
+.cc-todos {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.cc-todo {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: background 120ms ease;
+}
+
+.cc-todo:hover {
+	background: var(--cc-glass);
+}
+
+/* Scoped under .cc-root because Obsidian styles input[type="checkbox"]
+   globally in app.css — same reason as .cc-tab above. */
+.cc-root .cc-todo__box {
+	appearance: none;
+	-webkit-appearance: none;
+	position: relative;
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	flex: 0 0 auto;
+	background: transparent;
+	border: 1px solid var(--cc-hairline);
+	border-radius: 4px;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background 120ms ease, border-color 120ms ease;
+}
+
+.cc-root .cc-todo__box:hover {
+	border-color: var(--cc-text-dim);
+}
+
+.cc-root .cc-todo__box:focus-visible {
+	outline: 1px solid rgba(255, 255, 255, 0.4);
+	outline-offset: 1px;
+}
+
+.cc-root .cc-todo__box:checked {
+	background: var(--cc-text);
+	border-color: var(--cc-text);
+}
+
+.cc-root .cc-todo__box:checked::after {
+	content: "";
+	position: absolute;
+	left: 4.5px;
+	top: 1.5px;
+	width: 4px;
+	height: 8px;
+	border: solid var(--cc-bg);
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+}
+
+.cc-todo__text {
+	color: var(--cc-text);
+}
+
+.cc-todo__text--done {
+	color: var(--cc-text-dim);
+	text-decoration: line-through;
+}
+
+.cc-todos__empty {
+	margin: 0;
+	color: var(--cc-text-dim);
+}

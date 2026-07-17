@@ -2,13 +2,17 @@ import { Notice, TFile } from "obsidian";
 import type { App as ObsidianApp } from "obsidian";
 import { useEffect, useRef, useState } from "react";
 import {
+	MIT_PATH,
 	defaultState,
 	isCommandCenterPath,
 	isEcho,
 	loadMIT,
+	loadTodos,
 	saveMIT,
+	saveTodos,
+	todosPath,
 } from "./persistence";
-import type { Mit, MitState, Timer } from "./persistence";
+import type { Mit, MitState, Timer, TodoItem } from "./persistence";
 
 /* `id` is the storage key — phase 5 writes command-center/todos/{id}.md.
    Renaming a tab must never move a file, so nothing outside this table may
@@ -148,10 +152,60 @@ function MitBanner({
 	);
 }
 
-function TabPanel({ tab }: { tab: TabId }) {
+function TodoList({
+	todos,
+	onToggle,
+}: {
+	todos: TodoItem[];
+	onToggle: (item: TodoItem) => void;
+}) {
+	if (todos.length === 0) {
+		return (
+			<p className="cc-todos__empty">
+				No todos yet — add checkboxes in {todosPath("client")}
+			</p>
+		);
+	}
+
+	return (
+		<ul className="cc-todos">
+			{todos.map((item) => (
+				<li key={item.lineIndex}>
+					<label className="cc-todo">
+						<input
+							type="checkbox"
+							className="cc-todo__box"
+							checked={item.done}
+							onChange={() => onToggle(item)}
+						/>
+						<span
+							className={
+								item.done
+									? "cc-todo__text cc-todo__text--done"
+									: "cc-todo__text"
+							}
+						>
+							{item.text}
+						</span>
+					</label>
+				</li>
+			))}
+		</ul>
+	);
+}
+
+function TabPanel({
+	tab,
+	todos,
+	onToggle,
+}: {
+	tab: TabId;
+	todos: TodoItem[];
+	onToggle: (item: TodoItem) => void;
+}) {
 	switch (tab) {
 		case "client":
-			return <div />;
+			return <TodoList todos={todos} onToggle={onToggle} />;
 		case "build":
 			return <div />;
 		case "inbox":
@@ -169,6 +223,8 @@ export function App({ app }: { app: ObsidianApp }) {
 	const [initial] = useState(() => defaultState());
 	const [mit, setMit] = useState<Mit>(initial.mit);
 	const [timer, setTimer] = useState<Timer>(initial.timer);
+
+	const [todos, setTodos] = useState<TodoItem[]>([]);
 
 	const [now, setNow] = useState(() => Date.now());
 	const [hydrated, setHydrated] = useState(false);
@@ -190,10 +246,14 @@ export function App({ app }: { app: ObsidianApp }) {
 		let cancelled = false;
 
 		void (async () => {
-			const loaded = await loadMIT(app);
+			const [loaded, loadedTodos] = await Promise.all([
+				loadMIT(app),
+				loadTodos(app, "client"),
+			]);
 			if (cancelled) return;
 
 			applyLoaded(loaded);
+			setTodos(loadedTodos);
 			setHydrated(true);
 		})();
 
@@ -230,6 +290,16 @@ export function App({ app }: { app: ObsidianApp }) {
 		return () => window.clearInterval(id);
 	}, [running]);
 
+	/* No optimistic flip: saveTodos verifies against a fresh read and may
+	   refuse (stale lineIndex), so the file stays the source of truth — state
+	   follows from re-reading it either way. */
+	const toggleTodo = async (item: TodoItem) => {
+		await saveTodos(app, "client", [{ ...item, done: !item.done }]);
+
+		const fresh = await loadTodos(app, "client");
+		setTodos(fresh);
+	};
+
 	const remainingSec = remainingSecAt(timer, now);
 
 	useEffect(() => {
@@ -241,39 +311,54 @@ export function App({ app }: { app: ObsidianApp }) {
 
 	useEffect(() => {
 		let cancelled = false;
-		let timeoutId: number | null = null;
+		/* Debounce per path — one shared timeout would let an edit to mit.md
+		   swallow a pending todos reload (or vice versa) inside the same 300ms. */
+		const timeouts = new Map<string, number>();
+
+		const reload = async (file: TFile) => {
+			let raw: string;
+			try {
+				raw = await app.vault.read(file);
+			} catch {
+				return;
+			}
+			if (cancelled) return;
+
+			/* Our own save bouncing back. Re-reading here is what turns
+			   save → modify → re-read → save into a loop. */
+			if (isEcho(file.path, raw)) return;
+
+			if (file.path === MIT_PATH) {
+				const loaded = await loadMIT(app);
+				if (cancelled) return;
+
+				applyLoaded(loaded);
+			} else if (file.path === todosPath("client")) {
+				const fresh = await loadTodos(app, "client");
+				if (cancelled) return;
+
+				setTodos(fresh);
+			}
+		};
 
 		const ref = app.vault.on("modify", (file) => {
 			if (!isCommandCenterPath(file.path)) return;
 			if (!(file instanceof TFile)) return;
 
-			if (timeoutId !== null) window.clearTimeout(timeoutId);
+			const pending = timeouts.get(file.path);
+			if (pending !== undefined) window.clearTimeout(pending);
 
-			timeoutId = window.setTimeout(() => {
-				void (async () => {
-					let raw: string;
-					try {
-						raw = await app.vault.read(file);
-					} catch {
-						return;
-					}
-					if (cancelled) return;
-
-					/* Our own save bouncing back. Re-reading here is what turns
-					   save → modify → re-read → save into a loop. */
-					if (isEcho(file.path, raw)) return;
-
-					const loaded = await loadMIT(app);
-					if (cancelled) return;
-
-					applyLoaded(loaded);
-				})();
-			}, 300);
+			timeouts.set(
+				file.path,
+				window.setTimeout(() => {
+					void reload(file);
+				}, 300)
+			);
 		});
 
 		return () => {
 			cancelled = true;
-			if (timeoutId !== null) window.clearTimeout(timeoutId);
+			for (const id of timeouts.values()) window.clearTimeout(id);
 			app.vault.offref(ref);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -339,7 +424,11 @@ export function App({ app }: { app: ObsidianApp }) {
 			/>
 
 			<section className="cc-panel cc-card">
-				<TabPanel tab={activeTab} />
+				<TabPanel
+					tab={activeTab}
+					todos={todos}
+					onToggle={(item) => void toggleTodo(item)}
+				/>
 			</section>
 		</div>
 	);

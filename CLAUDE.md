@@ -48,5 +48,6 @@ Vault: /home/sg8/SilverCenterLife
 - Phase 2 ✅ scaffold + 5 tabs
 - Phase 3 ✅ MIT banner + timer — timestamp-derived แล้ว ไม่ได้นับ tick อีกต่อไป
 - Phase 5a ✅ mit.md persistence + watcher + echo suppression
-- Phase 5b → todos + checkbox บน Client tab (กำลังทำ)
+- Phase 5b ✅ todos/{tabId}.md + checkbox (wire แล้วเฉพาะ client)
+- ต่อไป: เชื่อม todo → MIT
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)

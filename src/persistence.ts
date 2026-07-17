@@ -205,11 +205,11 @@ export function isEcho(path: string, content: string): boolean {
 	return lastWritten.get(path) === hashContent(content);
 }
 
-async function ensureFolder(app: App): Promise<void> {
-	if (app.vault.getAbstractFileByPath(CC_FOLDER)) return;
+async function ensureFolder(app: App, path: string = CC_FOLDER): Promise<void> {
+	if (app.vault.getAbstractFileByPath(path)) return;
 
 	try {
-		await app.vault.createFolder(CC_FOLDER);
+		await app.vault.createFolder(path);
 	} catch {
 		/* Someone else created it between the check and the call. */
 	}
@@ -279,6 +279,110 @@ export async function loadMIT(app: App): Promise<MitState> {
 	}
 
 	return parseState(parsed, Date.now());
+}
+
+/* ------------------------------------------------------------------------- */
+/* Todos: command-center/todos/{tabId}.md                                     */
+/*                                                                            */
+/* One loader/saver for every tab — the tab id is the filename. The file is   */
+/* hand-edited markdown first and a data store second: headings, notes and    */
+/* plain bullets all live between the checkboxes, so a todo is never more     */
+/* than (lineIndex, text, done) pointing INTO the file. Toggling edits the    */
+/* one line it owns; the file is never re-serialised from a model.            */
+/* ------------------------------------------------------------------------- */
+
+export type TodoItem = {
+	lineIndex: number;
+	text: string;
+	done: boolean;
+};
+
+export const TODOS_FOLDER = `${CC_FOLDER}/todos`;
+
+export function todosPath(tabId: string): string {
+	return `${TODOS_FOLDER}/${tabId}.md`;
+}
+
+/* Groups: 1 = everything up to the mark (indent, - or * bullet, "[") ·
+   2 = the mark itself · 3 = "]" plus the following space · 4 = the rest of
+   the line, byte-exact including trailing spaces. 1+2+3+4 always rebuilds
+   the whole line. */
+const TODO_LINE = /^(\s*[-*]\s+\[)( |x|X)(\]\s?)(.*)$/;
+
+export function parseTodos(raw: string): TodoItem[] {
+	const items: TodoItem[] = [];
+	const lines = raw.split("\n");
+
+	for (let i = 0; i < lines.length; i++) {
+		const m = TODO_LINE.exec(lines[i]);
+		if (!m) continue;
+
+		items.push({ lineIndex: i, text: m[4], done: m[2] !== " " });
+	}
+
+	return items;
+}
+
+const TODO_SEED = `- [ ] เพิ่ม todo โดยแก้ไฟล์นี้\n- [ ] คลิก checkbox เพื่อ toggle\n`;
+
+export async function loadTodos(app: App, tabId: string): Promise<TodoItem[]> {
+	await ensureFolder(app);
+	await ensureFolder(app, TODOS_FOLDER);
+
+	const path = todosPath(tabId);
+	const file = app.vault.getAbstractFileByPath(path);
+
+	if (!(file instanceof TFile)) {
+		lastWritten.set(path, hashContent(TODO_SEED));
+		await app.vault.create(path, TODO_SEED);
+		return parseTodos(TODO_SEED);
+	}
+
+	let raw: string;
+	try {
+		raw = await app.vault.read(file);
+	} catch {
+		return [];
+	}
+
+	return parseTodos(raw);
+}
+
+/* Flips checkbox marks in place. Reads fresh before writing: the caller's
+   lineIndex may be stale (the file is hand-edited and the watcher debounces
+   300ms), so each item's line must still be a todo with the same text —
+   any mismatch aborts the whole write and the caller reloads instead.
+   Returns false when nothing was written. */
+export async function saveTodos(
+	app: App,
+	tabId: string,
+	items: TodoItem[]
+): Promise<boolean> {
+	const path = todosPath(tabId);
+	const file = app.vault.getAbstractFileByPath(path);
+	if (!(file instanceof TFile)) return false;
+
+	let raw: string;
+	try {
+		raw = await app.vault.read(file);
+	} catch {
+		return false;
+	}
+
+	const lines = raw.split("\n");
+
+	for (const item of items) {
+		const line = lines[item.lineIndex];
+		const m = line === undefined ? null : TODO_LINE.exec(line);
+		if (!m || m[4] !== item.text) return false;
+
+		lines[item.lineIndex] = `${m[1]}${item.done ? "x" : " "}${m[3]}${m[4]}`;
+	}
+
+	const content = lines.join("\n");
+	lastWritten.set(path, hashContent(content));
+	await app.vault.modify(file, content);
+	return true;
 }
 
 export async function saveMIT(app: App, mit: Mit, timer: Timer): Promise<void> {
