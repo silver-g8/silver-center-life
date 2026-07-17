@@ -423,6 +423,9 @@
 	appearance: none;
 	display: flex;
 	flex-direction: column;
+	/* Obsidian's global button rule sets align-items:center — without this the
+	   spans shrink to their content and centre. Pin them to the left edge. */
+	align-items: flex-start;
 	gap: 3px;
 	margin: 0;
 	padding: 8px 10px;
