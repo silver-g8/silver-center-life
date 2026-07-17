@@ -343,6 +343,12 @@ export function App({ app }: { app: ObsidianApp }) {
 	const remainingSec = remainingSecAt(timer, now);
 
 	const promoteTodo = (item: TodoItem) => {
+		/* Already in the front seat — clicking it again is a no-op. Bail before
+		   the confirm so we don't ask, reset the timer, or rewrite mit.md just
+		   to reseat the same (title, project) pair. seatTitle is null unless the
+		   banner is showing a client todo, so a non-client seat never matches. */
+		if (item.text === seatTitle) return;
+
 		/* Only a running block loses data worth asking about — a finished or
 		   expired one has nothing left. (Paused blocks skip the confirm per
 		   spec, though their remaining time is lost the same way.) */
