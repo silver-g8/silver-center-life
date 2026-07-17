@@ -1,5 +1,14 @@
-import { Notice } from "obsidian";
-import { useEffect, useState } from "react";
+import { Notice, TFile } from "obsidian";
+import type { App as ObsidianApp } from "obsidian";
+import { useEffect, useRef, useState } from "react";
+import {
+	defaultState,
+	isCommandCenterPath,
+	isEcho,
+	loadMIT,
+	saveMIT,
+} from "./persistence";
+import type { Mit, MitState, Timer } from "./persistence";
 
 /* `id` is the storage key — phase 5 writes command-center/todos/{id}.md.
    Renaming a tab must never move a file, so nothing outside this table may
@@ -14,27 +23,6 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-type Mit = {
-	title: string;
-	project: string;
-	est: number;
-	startedAt: number | null;
-};
-
-type Timer = {
-	totalSec: number;
-	startedAt: number;
-	pausedAt: number | null;
-	pausedAccumSec: number;
-	active: boolean;
-};
-
-const SEED_MIT = {
-	title: "Pick your first task",
-	project: "—",
-	est: 25,
-};
-
 /* The clock's only source of truth is wall time, never a tick count, so a
    throttled or suspended interval costs re-renders but never drifts. */
 function remainingSecAt(timer: Timer, now: number) {
@@ -46,6 +34,16 @@ function remainingSecAt(timer: Timer, now: number) {
 		(timer.pausedAt === null ? 0 : (now - timer.pausedAt) / 1000);
 
 	return Math.max(0, timer.totalSec - (wallSec - pausedSec));
+}
+
+/* A block that ran out while Obsidian was closed is finished, but it is not
+   news — silently retire it so the Notice effect never sees it. That alert is
+   for a block ending in front of you, not for yesterday's. */
+function withStaleGuard(loaded: MitState): MitState {
+	if (!loaded.timer.active) return loaded;
+	if (remainingSecAt(loaded.timer, Date.now()) > 0) return loaded;
+
+	return { ...loaded, timer: { ...loaded.timer, active: false } };
 }
 
 function formatClock(seconds: number) {
@@ -81,6 +79,7 @@ function MitBanner({
 }) {
 	const paused = timer.pausedAt !== null;
 	const status = !timer.active ? "idle" : paused ? "paused" : "running";
+	const primaryLabel = !timer.active ? "Start" : paused ? "Resume" : "Pause";
 	const pct =
 		timer.totalSec > 0
 			? ((timer.totalSec - remainingSec) / timer.totalSec) * 100
@@ -124,12 +123,10 @@ function MitBanner({
 				</div>
 
 				<div className="cc-mit__actions">
-					<button
-						className="cc-pill"
-						onClick={onPause}
-						disabled={!timer.active}
-					>
-						{paused ? "Resume" : "Pause"}
+					{/* Never disabled: this is the only way back from a finished
+					    block, which now survives a reload. */}
+					<button className="cc-pill" onClick={onPause}>
+						{primaryLabel}
 					</button>
 					<button
 						className="cc-pill"
@@ -166,23 +163,59 @@ function TabPanel({ tab }: { tab: TabId }) {
 	}
 }
 
-export function App() {
+export function App({ app }: { app: ObsidianApp }) {
 	const [activeTab, setActiveTab] = useState<TabId>("client");
 
-	const [mit] = useState<Mit>(() => ({
-		...SEED_MIT,
-		startedAt: Date.now(),
-	}));
-
-	const [timer, setTimer] = useState<Timer>(() => ({
-		totalSec: SEED_MIT.est * 60,
-		startedAt: Date.now(),
-		pausedAt: null,
-		pausedAccumSec: 0,
-		active: true,
-	}));
+	const [initial] = useState(() => defaultState());
+	const [mit, setMit] = useState<Mit>(initial.mit);
+	const [timer, setTimer] = useState<Timer>(initial.timer);
 
 	const [now, setNow] = useState(() => Date.now());
+	const [hydrated, setHydrated] = useState(false);
+
+	/* Set whenever state arrives *from* the file, so the save effect that fires
+	   right after does not immediately write it back. */
+	const skipSave = useRef(false);
+
+	const applyLoaded = (loaded: MitState) => {
+		const next = withStaleGuard(loaded);
+
+		skipSave.current = true;
+		setMit(next.mit);
+		setTimer(next.timer);
+		setNow(Date.now());
+	};
+
+	useEffect(() => {
+		let cancelled = false;
+
+		void (async () => {
+			const loaded = await loadMIT(app);
+			if (cancelled) return;
+
+			applyLoaded(loaded);
+			setHydrated(true);
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [app]);
+
+	/* `now` is deliberately absent: it changes every second and would turn this
+	   into a once-a-second write. mit and timer only get new identities when a
+	   button is pressed, which is exactly when the file should change. */
+	useEffect(() => {
+		if (!hydrated) return;
+
+		if (skipSave.current) {
+			skipSave.current = false;
+			return;
+		}
+
+		void saveMIT(app, mit, timer);
+	}, [app, mit, timer, hydrated]);
 
 	const running = timer.active && timer.pausedAt === null;
 
@@ -206,6 +239,46 @@ export function App() {
 		new Notice(`Focus block finished — ${mit.title}`, 0);
 	}, [timer.active, remainingSec, mit.title]);
 
+	useEffect(() => {
+		let cancelled = false;
+		let timeoutId: number | null = null;
+
+		const ref = app.vault.on("modify", (file) => {
+			if (!isCommandCenterPath(file.path)) return;
+			if (!(file instanceof TFile)) return;
+
+			if (timeoutId !== null) window.clearTimeout(timeoutId);
+
+			timeoutId = window.setTimeout(() => {
+				void (async () => {
+					let raw: string;
+					try {
+						raw = await app.vault.read(file);
+					} catch {
+						return;
+					}
+					if (cancelled) return;
+
+					/* Our own save bouncing back. Re-reading here is what turns
+					   save → modify → re-read → save into a loop. */
+					if (isEcho(file.path, raw)) return;
+
+					const loaded = await loadMIT(app);
+					if (cancelled) return;
+
+					applyLoaded(loaded);
+				})();
+			}, 300);
+		});
+
+		return () => {
+			cancelled = true;
+			if (timeoutId !== null) window.clearTimeout(timeoutId);
+			app.vault.offref(ref);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [app]);
+
 	return (
 		<div className="cc-root">
 			<nav className="cc-topbar cc-card">
@@ -226,21 +299,39 @@ export function App() {
 				mit={mit}
 				timer={timer}
 				remainingSec={remainingSec}
-				onPause={() =>
+				onPause={() => {
+					const at = Date.now();
+
+					/* `now` stops updating whenever the interval does — every pause,
+					   every finished block. Both branches that hand control back to
+					   the clock would otherwise measure this fresh timestamp against
+					   a stale one and read high for a frame. Harmless on the pause
+					   branch, where `now` cancels out of remainingSecAt anyway. */
+					setNow(at);
+
+					/* One `at` for every branch: a second Date.now() here would put
+					   a few ms of skew back between the clock and the state. */
 					setTimer((t) => {
-						if (!t.active) return t;
+						if (!t.active) {
+							return {
+								...t,
+								active: true,
+								startedAt: at,
+								pausedAt: null,
+								pausedAccumSec: 0,
+							};
+						}
 						if (t.pausedAt === null) {
-							return { ...t, pausedAt: Date.now() };
+							return { ...t, pausedAt: at };
 						}
 						return {
 							...t,
 							pausedAt: null,
 							pausedAccumSec:
-								t.pausedAccumSec +
-								(Date.now() - t.pausedAt) / 1000,
+								t.pausedAccumSec + (at - t.pausedAt) / 1000,
 						};
-					})
-				}
+					});
+				}}
 				onAddFive={() =>
 					setTimer((t) => ({ ...t, totalSec: t.totalSec + 5 * 60 }))
 				}

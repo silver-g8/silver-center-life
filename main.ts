@@ -26,7 +26,7 @@ class DashboardView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		this.root = createRoot(this.contentEl);
-		this.root.render(createElement(App));
+		this.root.render(createElement(App, { app: this.app }));
 	}
 
 	async onClose(): Promise<void> {

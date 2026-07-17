@@ -39,8 +39,7 @@ Vault: /home/sg8/SilverCenterLife
 
 ## Status
 - Phase 2 ✅ scaffold + 5 tabs
-- Phase 3 ✅ MIT banner + timer — state อยู่ใน React ล้วน ยังไม่ persist
-  timer นับจำนวน tick ของ setInterval ไม่ใช่เวลาจริง → เพี้ยนได้ถ้าสลับ tab นาน ๆ
-  Phase 5 มี startedAt ใน markdown แล้ว ค่อยเปลี่ยนไปคิดจาก Date.now() - startedAt
-- ต่อไป: Phase 5 persistence ลง markdown → Client tab
+- Phase 3 ✅ MIT banner + timer — timestamp-derived แล้ว ไม่ได้นับ tick อีกต่อไป
+- Phase 5a ✅ mit.md persistence + watcher + echo suppression
+- Phase 5b → todos + checkbox บน Client tab (กำลังทำ)
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)
