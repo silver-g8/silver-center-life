@@ -23,7 +23,14 @@ Vault: /home/sg8/SilverCenterLife
 
 ## Known trap
 - vault watcher + save-on-change ทำให้เกิดลูป (save → modify event → re-read → save)
-  ต้องมี echo suppression (เทียบ hash ของสิ่งที่เพิ่งเขียน) + debounce 300ms
+  → echo suppression (hash) + debounce 300ms + skipSave ref กันรอบแรกหลัง hydrate
+  ทุกไฟล์ใหม่ที่ persist ต้องใช้กลไกนี้ซ้ำ ห้ามสร้างตัวที่สองขนานกัน
+  และ dep array ของ save effect ห้ามมีค่าที่เปลี่ยนทุกวินาที (เช่น now)
+- setNow(at) ใน timer handler ดูซ้ำซ้อนแต่ห้ามลบ
+  now แช่แข็งเมื่อ interval ถูก cleanup (pause/done) ทุกสาขาที่เซ็ต pausedAt = null
+  ต้อง setNow ด้วย timestamp ตัวเดียวกับที่เขียนลง state ไม่งั้นเฟรมแรกอ่านเกิน totalSec
+  → progress bar width ติดลบ CSS ทิ้ง declaration = แถบเต็มแว้บ
+  กัดมาแล้ว 2 รอบ (Start, Resume)
 
 ## Commands
 - `npm run dev` — esbuild watch, dev build (ปล่อยรันทิ้งไว้)
