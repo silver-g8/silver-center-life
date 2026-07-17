@@ -318,8 +318,23 @@
 	transform: rotate(45deg);
 }
 
+/* The todo currently in the front seat — a hairline on the left edge,
+   no layout shift (inset shadow instead of a border). */
+.cc-todo--seat {
+	box-shadow: inset 2px 0 0 var(--cc-text);
+}
+
 .cc-todo__text {
 	color: var(--cc-text);
+	cursor: pointer;
+}
+
+/* Text click promotes (checkbox click toggles) — underline only the text so
+   the two targets read as two different actions. */
+.cc-todo__text:hover {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: var(--cc-text-dim);
 }
 
 .cc-todo__text--done {

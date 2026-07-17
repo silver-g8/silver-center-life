@@ -154,10 +154,16 @@ function MitBanner({
 
 function TodoList({
 	todos,
+	seatTitle,
 	onToggle,
+	onPromote,
 }: {
 	todos: TodoItem[];
+	/* Title of the todo currently in the front seat, or null when the seat
+	   belongs to another tab — pure derived state, nothing extra on disk. */
+	seatTitle: string | null;
 	onToggle: (item: TodoItem) => void;
+	onPromote: (item: TodoItem) => void;
 }) {
 	if (todos.length === 0) {
 		return (
@@ -171,11 +177,21 @@ function TodoList({
 		<ul className="cc-todos">
 			{todos.map((item) => (
 				<li key={item.lineIndex}>
-					<label className="cc-todo">
+					{/* A row, not a <label>: label semantics would make a text
+					    click tick the checkbox, and the text click is promote. */}
+					<div
+						className={
+							item.text === seatTitle
+								? "cc-todo cc-todo--seat"
+								: "cc-todo"
+						}
+						onClick={() => onPromote(item)}
+					>
 						<input
 							type="checkbox"
 							className="cc-todo__box"
 							checked={item.done}
+							onClick={(e) => e.stopPropagation()}
 							onChange={() => onToggle(item)}
 						/>
 						<span
@@ -187,7 +203,7 @@ function TodoList({
 						>
 							{item.text}
 						</span>
-					</label>
+					</div>
 				</li>
 			))}
 		</ul>
@@ -197,15 +213,26 @@ function TodoList({
 function TabPanel({
 	tab,
 	todos,
+	seatTitle,
 	onToggle,
+	onPromote,
 }: {
 	tab: TabId;
 	todos: TodoItem[];
+	seatTitle: string | null;
 	onToggle: (item: TodoItem) => void;
+	onPromote: (item: TodoItem) => void;
 }) {
 	switch (tab) {
 		case "client":
-			return <TodoList todos={todos} onToggle={onToggle} />;
+			return (
+				<TodoList
+					todos={todos}
+					seatTitle={seatTitle}
+					onToggle={onToggle}
+					onPromote={onPromote}
+				/>
+			);
 		case "build":
 			return <div />;
 		case "inbox":
@@ -290,17 +317,63 @@ export function App({ app }: { app: ObsidianApp }) {
 		return () => window.clearInterval(id);
 	}, [running]);
 
+	/* The seated todo is identified by value, not by reference: the same
+	   (title, project) pair the banner already shows. Nothing new on disk. */
+	const seatTitle = mit.project === "client" ? mit.title : null;
+
 	/* No optimistic flip: saveTodos verifies against a fresh read and may
 	   refuse (stale lineIndex), so the file stays the source of truth — state
 	   follows from re-reading it either way. */
 	const toggleTodo = async (item: TodoItem) => {
-		await saveTodos(app, "client", [{ ...item, done: !item.done }]);
+		const nextDone = !item.done;
+		const ok = await saveTodos(app, "client", [{ ...item, done: nextDone }]);
 
 		const fresh = await loadTodos(app, "client");
 		setTodos(fresh);
+
+		/* Checking off the seated todo finishes its block. Only on a write
+		   that really landed — a refused save means the file (and therefore
+		   the todo) did not actually change. Title stays so the banner shows
+		   what just got finished; the button turns into Start by itself. */
+		if (ok && nextDone && item.text === seatTitle && timer.active) {
+			setTimer((t) => ({ ...t, active: false }));
+		}
 	};
 
 	const remainingSec = remainingSecAt(timer, now);
+
+	const promoteTodo = (item: TodoItem) => {
+		/* Only a running block loses data worth asking about — a finished or
+		   expired one has nothing left. (Paused blocks skip the confirm per
+		   spec, though their remaining time is lost the same way.) */
+		if (timer.active && timer.pausedAt === null && remainingSec > 0) {
+			const replace = window.confirm(
+				`มี block กำลังวิ่งอยู่ — "${mit.title}"\nเริ่ม block ใหม่ทับเลยไหม?`
+			);
+			if (!replace) return;
+		}
+
+		/* Third bite of the stale-`now` trap (see CLAUDE.md): this is a new
+		   handler that flips pausedAt back to null, so it must refresh `now`
+		   with the same timestamp it writes into state. */
+		const at = Date.now();
+		setNow(at);
+
+		const fresh = defaultState();
+		setMit({
+			title: item.text,
+			project: "client",
+			est: fresh.mit.est,
+			startedAt: at,
+		});
+		setTimer({
+			totalSec: fresh.timer.totalSec,
+			startedAt: at,
+			pausedAt: null,
+			pausedAccumSec: 0,
+			active: true,
+		});
+	};
 
 	useEffect(() => {
 		if (!timer.active || remainingSec > 0) return;
@@ -427,7 +500,9 @@ export function App({ app }: { app: ObsidianApp }) {
 				<TabPanel
 					tab={activeTab}
 					todos={todos}
+					seatTitle={seatTitle}
 					onToggle={(item) => void toggleTodo(item)}
+					onPromote={promoteTodo}
 				/>
 			</section>
 		</div>
