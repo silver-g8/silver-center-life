@@ -53,5 +53,6 @@ Vault: /home/sg8/SilverCenterLife
 - todo → MIT ✅ คลิกข้อความ todo = promote ขึ้น front seat (checkbox ยังเป็น toggle) · คลิก todo ที่นั่งอยู่แล้ว = no-op (ไม่ถาม ไม่รีเซ็ต ไม่เขียนไฟล์)
 - Phase 7 ✅ live feeds บน Build tab (HN + Reddit + tweets.md) — src/data-sources/feeds.ts
   cache 10m TTL + in-flight guard + stale fallback · refresh interval แยกจาก timer 1 วิ · tweets เข้า watcher ตัวเดิม
-  (⏳ ยังค้าง runtime verify ใน Obsidian จริง: เปิด/ปิด view 5 รอบดู interval ไม่งอก + offline stale)
+  runtime verify: เปิด/ปิด view 5 รอบ → MOUNT=CLEANUP interval ไม่งอก ✅ (2026-07-18)
+  offline stale ข้าม runtime — มี unit test คุม (stale fallback via Date.now time-travel)
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)
