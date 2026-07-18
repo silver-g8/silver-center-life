@@ -45,6 +45,14 @@ Vault: /home/sg8/SilverCenterLife
   `npm run dev` เขียน main.js เป็น dev build (inline sourcemap ~24k บรรทัด) ถ้า commit ตอนนั้น
   diff จะเด้ง 24k บรรทัดสลับไปมาทุก commit — เลือกวิธีนี้แทนการ gitignore main.js แล้ว (2026-07-16)
 
+## Phase 6 — ความหมายของเลข (pin ไว้ ห้ามตีความเอง)
+- **6a** = อ่าน calendar.md + Day view ✅ เสร็จแล้ว
+- **6b** = **Week view — layout ล้วน ยัง read-only ไม่แตะ persistence**
+- **6c** = เขียนผ่าน UI — จุดที่ echo-suppression/save กลับมา
+  ก่อนเริ่ม 6c ต้องเปลี่ยน `key={i}` ใน DayView (src/app.tsx:369) เป็น id จริงก่อน
+  ไม่งั้น React จับคู่แถวผิดตอนลบ/แทรก
+- ถ้าสั่งแค่ "ทำ 6b" ให้ยึดนิยามข้างบนนี้ ห้ามเดาว่าเป็น Day view แบบเขียนได้
+
 ## Status
 - Phase 2 ✅ scaffold + 5 tabs
 - Phase 3 ✅ MIT banner + timer — timestamp-derived แล้ว ไม่ได้นับ tick อีกต่อไป
@@ -56,4 +64,7 @@ Vault: /home/sg8/SilverCenterLife
   runtime verify: เปิด/ปิด view 5 รอบ → MOUNT=CLEANUP interval ไม่งอก ✅ (2026-07-18)
   offline stale ข้าม runtime — มี unit test คุม (stale fallback via Date.now time-travel)
   document.hidden guard: refresh ข้ามรอบเมื่อพับ/minimize Obsidian ประหยัด quota HN/Reddit (2026-07-18)
+- Phase 6a ✅ Day view read-only (src/app.tsx:304–424) + parser src/data-sources/calendar.ts
+  parser ทิ้ง event ที่ end <= start (เช่น `- 15:00-09:00`) — data layer ส่งเฉพาะที่ layout ได้จริง
+  UI ไม่ต้องแบกความรับผิดชอบนั้น สำคัญขึ้นตอน Week view ที่ block เล็กลง (2026-07-19)
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)

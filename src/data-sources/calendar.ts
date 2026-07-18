@@ -68,6 +68,10 @@ export function parseCalendar(raw: string): CalEvent[] {
 		if (endRaw !== null) {
 			const parsedEnd = parseTimeToMin(endRaw);
 			if (parsedEnd === null) continue; // malformed end → drop, never throw
+			/* An end at or before the start can't be laid out — the height math
+			   downstream would go zero or negative. Drop it here so the data
+			   layer only ever hands the UI events it can actually draw. */
+			if (parsedEnd <= startMin) continue;
 			end = endRaw.trim();
 			endMin = parsedEnd;
 		}
