@@ -539,6 +539,11 @@ export function App({ app }: { app: ObsidianApp }) {
 		let cancelled = false;
 
 		const refresh = () => {
+			/* พับ Obsidian / minimize ทิ้งไว้ — ข้ามรอบนี้ ไม่ยิง API ฟรีของ
+			   HN/Reddit ทิ้ง. รอบถัดไปใน 10 นาทีค่อยว่ากันใหม่ ถ้าตอนนั้นจอกลับมา
+			   visible แล้ว. cache เดิมยังค้างอยู่บนการ์ด ไม่กระพริบ */
+			if (document.hidden) return;
+
 			setHnLoading(true);
 			void fetchHackerNews().then((r) => {
 				if (cancelled) return;
