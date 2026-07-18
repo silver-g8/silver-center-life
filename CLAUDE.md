@@ -55,4 +55,5 @@ Vault: /home/sg8/SilverCenterLife
   cache 10m TTL + in-flight guard + stale fallback · refresh interval แยกจาก timer 1 วิ · tweets เข้า watcher ตัวเดิม
   runtime verify: เปิด/ปิด view 5 รอบ → MOUNT=CLEANUP interval ไม่งอก ✅ (2026-07-18)
   offline stale ข้าม runtime — มี unit test คุม (stale fallback via Date.now time-travel)
+  document.hidden guard: refresh ข้ามรอบเมื่อพับ/minimize Obsidian ประหยัด quota HN/Reddit (2026-07-18)
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)
