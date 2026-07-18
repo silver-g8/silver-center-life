@@ -354,6 +354,16 @@ function DayView({ events, now }: { events: CalEvent[]; now: number }) {
 												HOUR_PX
 									  );
 
+							const timeLabel = ev.end
+								? `${ev.start}–${ev.end}`
+								: ev.start;
+							/* Full text on hover — a short block clips the time
+							   line (and a long title ellipsizes), so the tooltip
+							   is where you read the whole thing. */
+							const tooltip = ev.tag
+								? `${timeLabel} · ${ev.title} · ${ev.tag}`
+								: `${timeLabel} · ${ev.title}`;
+
 							return (
 								<div
 									key={i}
@@ -363,18 +373,38 @@ function DayView({ events, now }: { events: CalEvent[]; now: number }) {
 											: "cc-day__event"
 									}
 									style={{ top: `${top}px`, height: `${height}px` }}
+									title={tooltip}
 								>
-									<span className="cc-day__event-time">
-										{ev.start}
-										{ev.end ? `–${ev.end}` : ""}
-									</span>
-									<span className="cc-day__event-title">
-										{ev.title}
-									</span>
-									{ev.tag && (
-										<span className="cc-day__event-tag">
-											{ev.tag}
-										</span>
+									{isPoint ? (
+										/* One row: dot · time · title. Point events
+										   are 22px, so everything sits inline. */
+										<>
+											<span className="cc-day__event-time">
+												{timeLabel}
+											</span>
+											<span className="cc-day__event-title">
+												{ev.title}
+											</span>
+										</>
+									) : (
+										/* Title-first so it always survives a short
+										   block; time drops to the second line and
+										   is the first thing clipped when cramped. */
+										<>
+											<div className="cc-day__event-head">
+												<span className="cc-day__event-title">
+													{ev.title}
+												</span>
+												{ev.tag && (
+													<span className="cc-day__event-tag">
+														{ev.tag}
+													</span>
+												)}
+											</div>
+											<span className="cc-day__event-time">
+												{timeLabel}
+											</span>
+										</>
 									)}
 								</div>
 							);

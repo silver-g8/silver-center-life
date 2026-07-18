@@ -561,25 +561,42 @@
 	border-radius: 6px;
 }
 
-.cc-day__event-time {
-	color: var(--cc-text-dim);
-	font-size: 10px;
-	font-variant-numeric: tabular-nums;
+/* Title row of a block: the title takes the width, the tag rides the right.
+   flex:0 0 auto everywhere keeps natural heights so the title is never
+   squeezed away — a too-short block just clips the time line below it. */
+.cc-day__event-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+	min-width: 0;
 }
 
 .cc-day__event-title {
+	flex: 1 1 auto;
+	min-width: 0;
 	color: var(--cc-text);
 	font-size: 12px;
-	line-height: 1.25;
+	line-height: 1.3;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
+.cc-day__event-time {
+	flex: 0 0 auto;
+	color: var(--cc-text-dim);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
 .cc-day__event-tag {
-	align-self: flex-start;
-	margin-top: 1px;
+	flex: 0 0 auto;
+	max-width: 45%;
 	padding: 0 5px;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 	background: var(--cc-glass-hover);
 	border: 1px solid var(--cc-hairline);
 	border-radius: 4px;
@@ -588,7 +605,8 @@
 	letter-spacing: 0.04em;
 }
 
-/* Point event (no end time) — no block, just a marker dot and an inline row. */
+/* Point event (no end time) — no block, just a marker dot and an inline row
+   of time · title (tag lives in the tooltip; the row is only 22px). */
 .cc-day__event--point {
 	flex-direction: row;
 	align-items: center;
