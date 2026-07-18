@@ -26,6 +26,8 @@ import type {
 	RedditItem,
 	TweetItem,
 } from "./data-sources/feeds";
+import { CALENDAR_PATH, loadCalendar } from "./data-sources/calendar";
+import type { CalEvent } from "./data-sources/calendar";
 
 /* `id` is the storage key — phase 5 writes command-center/todos/{id}.md.
    Renaming a tab must never move a file, so nothing outside this table may
@@ -285,6 +287,112 @@ function FeedCard({
 	);
 }
 
+/* --- Day view (calendar) ------------------------------------------------- */
+/* The rail is a fixed grid: every minute maps to the SAME number of pixels, so
+   a block's vertical position is pure arithmetic — no per-event measuring. */
+const RAIL_START_MIN = 7 * 60; // 07:00
+const RAIL_END_MIN = 22 * 60; // 22:00
+const HOUR_PX = 44; // one hour = 44px of rail height
+const POINT_PX = 22; // fixed height for a point event (no end time)
+
+/* minutes-from-midnight → pixels down from the top of the rail. This one line
+   is the whole layout: (min - railStart) / 60 hours × 44px per hour. */
+function minToTop(min: number): number {
+	return ((min - RAIL_START_MIN) / 60) * HOUR_PX;
+}
+
+function DayView({ events, now }: { events: CalEvent[]; now: number }) {
+	const railPx = minToTop(RAIL_END_MIN); // total rail height in px
+
+	const hours: number[] = [];
+	for (let h = RAIL_START_MIN / 60; h <= RAIL_END_MIN / 60; h++) hours.push(h);
+
+	/* The now-line rides the timer's existing `now` — no interval of its own.
+	   While a focus block runs, `now` ticks each second and the line glides;
+	   when idle it simply sits at the last `now`, which is fine for a hint. */
+	const nowDate = new Date(now);
+	const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
+	const nowInRange = nowMin >= RAIL_START_MIN && nowMin <= RAIL_END_MIN;
+
+	return (
+		<div className="cc-day cc-card">
+			<div className="cc-feed__head">
+				<span className="cc-feed__title">Today</span>
+				<span className="cc-feed__meta">
+					<span className="cc-feed__count">{events.length}</span>
+				</span>
+			</div>
+
+			<div className="cc-day__scroll">
+				{events.length === 0 ? (
+					<p className="cc-feed__empty">
+						No events — add lines in {CALENDAR_PATH}
+					</p>
+				) : (
+					<div className="cc-day__rail" style={{ height: `${railPx}px` }}>
+						{hours.map((h) => (
+							<div
+								key={h}
+								className="cc-day__hour"
+								style={{ top: `${minToTop(h * 60)}px` }}
+							>
+								<span className="cc-day__hour-label">
+									{String(h).padStart(2, "0")}:00
+								</span>
+							</div>
+						))}
+
+						{events.map((ev, i) => {
+							const top = minToTop(ev.startMin);
+							const isPoint = ev.endMin === null;
+							const height =
+								ev.endMin === null
+									? POINT_PX
+									: Math.max(
+											POINT_PX,
+											((ev.endMin - ev.startMin) / 60) *
+												HOUR_PX
+									  );
+
+							return (
+								<div
+									key={i}
+									className={
+										isPoint
+											? "cc-day__event cc-day__event--point"
+											: "cc-day__event"
+									}
+									style={{ top: `${top}px`, height: `${height}px` }}
+								>
+									<span className="cc-day__event-time">
+										{ev.start}
+										{ev.end ? `–${ev.end}` : ""}
+									</span>
+									<span className="cc-day__event-title">
+										{ev.title}
+									</span>
+									{ev.tag && (
+										<span className="cc-day__event-tag">
+											{ev.tag}
+										</span>
+									)}
+								</div>
+							);
+						})}
+
+						{nowInRange && (
+							<div
+								className="cc-day__now"
+								style={{ top: `${minToTop(nowMin)}px` }}
+							/>
+						)}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
 function BuildFeeds({
 	hn,
 	reddit,
@@ -391,6 +499,7 @@ function TabPanel({
 	hn,
 	reddit,
 	tweets,
+	events,
 	hnLoading,
 	redditLoading,
 	now,
@@ -403,6 +512,7 @@ function TabPanel({
 	hn: FeedResult<HnItem>;
 	reddit: FeedResult<RedditItem>;
 	tweets: TweetItem[];
+	events: CalEvent[];
 	hnLoading: boolean;
 	redditLoading: boolean;
 	now: number;
@@ -419,14 +529,17 @@ function TabPanel({
 			);
 		case "build":
 			return (
-				<BuildFeeds
-					hn={hn}
-					reddit={reddit}
-					tweets={tweets}
-					hnLoading={hnLoading}
-					redditLoading={redditLoading}
-					now={now}
-				/>
+				<div className="cc-build">
+					<DayView events={events} now={now} />
+					<BuildFeeds
+						hn={hn}
+						reddit={reddit}
+						tweets={tweets}
+						hnLoading={hnLoading}
+						redditLoading={redditLoading}
+						now={now}
+					/>
+				</div>
 			);
 		case "inbox":
 			return <div />;
@@ -464,6 +577,10 @@ export function App({ app }: { app: ObsidianApp }) {
 	const [redditLoading, setRedditLoading] = useState(false);
 	const [tweets, setTweets] = useState<TweetItem[]>([]);
 
+	/* Day-view calendar events (command-center/calendar.md). Read-only, so like
+	   tweets it is loaded on mount and re-read by the watcher — never written. */
+	const [events, setEvents] = useState<CalEvent[]>([]);
+
 	const [now, setNow] = useState(() => Date.now());
 	const [hydrated, setHydrated] = useState(false);
 
@@ -484,16 +601,19 @@ export function App({ app }: { app: ObsidianApp }) {
 		let cancelled = false;
 
 		void (async () => {
-			const [loaded, loadedTodos, loadedTweets] = await Promise.all([
-				loadMIT(app),
-				loadTodos(app, "client"),
-				loadTweets(app),
-			]);
+			const [loaded, loadedTodos, loadedTweets, loadedEvents] =
+				await Promise.all([
+					loadMIT(app),
+					loadTodos(app, "client"),
+					loadTweets(app),
+					loadCalendar(app),
+				]);
 			if (cancelled) return;
 
 			applyLoaded(loaded);
 			setTodos(loadedTodos);
 			setTweets(loadedTweets);
+			setEvents(loadedEvents);
 			setHydrated(true);
 		})();
 
@@ -676,6 +796,13 @@ export function App({ app }: { app: ObsidianApp }) {
 				if (cancelled) return;
 
 				setTweets(fresh);
+			} else if (file.path === CALENDAR_PATH) {
+				/* Read-only, same as tweets above — re-read on any edit, no echo
+				   to suppress because nothing is ever written back. */
+				const fresh = await loadCalendar(app);
+				if (cancelled) return;
+
+				setEvents(fresh);
 			}
 		};
 
@@ -771,6 +898,7 @@ export function App({ app }: { app: ObsidianApp }) {
 					hn={hn}
 					reddit={reddit}
 					tweets={tweets}
+					events={events}
 					hnLoading={hnLoading}
 					redditLoading={redditLoading}
 					now={now}

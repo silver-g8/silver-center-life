@@ -472,3 +472,161 @@
 	color: var(--cc-text-dim);
 	font-size: 12px;
 }
+
+/* Build tab layout — the read-only Day view sits to the left of the three
+   feed cards. Stacks under a narrow pane. */
+.cc-build {
+	display: flex;
+	gap: 16px;
+	height: 100%;
+	min-height: 0;
+}
+
+.cc-build > .cc-day {
+	flex: 0 0 300px;
+}
+
+.cc-build > .cc-feeds {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+@media (max-width: 720px) {
+	.cc-build {
+		flex-direction: column;
+		height: auto;
+	}
+
+	.cc-build > .cc-day {
+		flex: 0 0 auto;
+		height: 420px;
+	}
+}
+
+/* Day view — a fixed-pixel hour rail; every event is absolutely positioned by
+   minToTop() (minutes-from-midnight → px). Read-only, no interaction. */
+.cc-day {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden; /* clip the rail to the card's rounded corners */
+}
+
+.cc-day__scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 10px 12px;
+	overflow-y: auto;
+}
+
+/* margin-left is the gutter the hour labels live in; the rail's own
+   coordinate origin starts after it, so event math stays label-agnostic. */
+.cc-day__rail {
+	position: relative;
+	margin-left: 44px;
+}
+
+.cc-day__hour {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 0;
+	border-top: 1px solid var(--cc-hairline);
+}
+
+.cc-day__hour-label {
+	position: absolute;
+	left: -44px;
+	top: -6px;
+	width: 38px;
+	text-align: right;
+	color: var(--cc-text-dim);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.cc-day__event {
+	position: absolute;
+	left: 0;
+	right: 6px;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 3px 8px;
+	overflow: hidden;
+	background: var(--cc-glass);
+	border: 1px solid var(--cc-hairline);
+	border-left: 2px solid var(--cc-text);
+	border-radius: 6px;
+}
+
+.cc-day__event-time {
+	color: var(--cc-text-dim);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.cc-day__event-title {
+	color: var(--cc-text);
+	font-size: 12px;
+	line-height: 1.25;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cc-day__event-tag {
+	align-self: flex-start;
+	margin-top: 1px;
+	padding: 0 5px;
+	background: var(--cc-glass-hover);
+	border: 1px solid var(--cc-hairline);
+	border-radius: 4px;
+	color: var(--cc-text-dim);
+	font-size: 9px;
+	letter-spacing: 0.04em;
+}
+
+/* Point event (no end time) — no block, just a marker dot and an inline row. */
+.cc-day__event--point {
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 8px 3px 0;
+	background: transparent;
+	border: none;
+	border-radius: 0;
+}
+
+.cc-day__event--point::before {
+	content: "";
+	flex: 0 0 auto;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--cc-text);
+}
+
+/* The now-line rides the timer's existing `now` — no interval of its own.
+   Brighter than the hour hairlines so it reads as "right now", with a dot at
+   the left end. Stays monochrome per the design. */
+.cc-day__now {
+	position: absolute;
+	left: -6px;
+	right: 0;
+	height: 0;
+	border-top: 1px solid var(--cc-text);
+	z-index: 2;
+}
+
+.cc-day__now::before {
+	content: "";
+	position: absolute;
+	left: -3px;
+	top: -3px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--cc-text);
+}
