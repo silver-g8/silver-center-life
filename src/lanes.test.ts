@@ -137,3 +137,31 @@ describe("laneAssign — result shape", () => {
 		expect(counts(out)).toEqual([2, 2]);
 	});
 });
+
+describe("laneAssign — invariants the view relies on", () => {
+	it("never reports a laneCount of zero", () => {
+		/* WeekColumn divides 100 by laneCount to get a width. A zero would
+		   yield Infinity%, CSS would drop the declaration, and the block would
+		   silently span the whole day column. */
+		const out = laneAssign([
+			block(9, 0, 10, 0),
+			block(9, 30, 11, 0),
+			point(14, 0),
+			block(20, 0, 21, 0),
+		]);
+		for (const r of out) expect(r.laneCount).toBeGreaterThanOrEqual(1);
+	});
+
+	it("never places an event outside its own lane count", () => {
+		const out = laneAssign([
+			block(9, 0, 12, 0),
+			block(9, 30, 12, 30),
+			block(10, 0, 11, 0),
+			block(15, 0, 16, 0),
+		]);
+		for (const r of out) {
+			expect(r.lane).toBeGreaterThanOrEqual(0);
+			expect(r.lane).toBeLessThan(r.laneCount);
+		}
+	});
+});

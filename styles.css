@@ -648,3 +648,133 @@
 	border-radius: 50%;
 	background: var(--cc-text);
 }
+
+/* Week view — seven day columns sharing one hour rail. Same minToTop() maths
+   as the Day view; the only new idea is horizontal: colliding events are
+   packed into lanes by laneAssign() and positioned with left/width in %. */
+.cc-week {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.cc-week__scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 10px 12px;
+	overflow-y: auto;
+}
+
+/* The hour gutter is a sibling of the columns, not a parent, so the columns
+   can share the grid's height without inheriting the label offset. */
+.cc-week__grid {
+	position: relative;
+	display: flex;
+	gap: 3px;
+	margin-left: 44px;
+	padding-top: 18px; /* room for the column heads */
+}
+
+.cc-week__hours {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 18px;
+	bottom: 0;
+}
+
+.cc-week__col {
+	position: relative;
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.cc-week__colhead {
+	position: absolute;
+	top: -18px;
+	left: 0;
+	right: 0;
+	display: flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: 3px;
+	font-size: 10px;
+	color: var(--cc-text-dim);
+}
+
+.cc-week__col--today .cc-week__colhead {
+	color: var(--cc-text);
+}
+
+.cc-week__daynum {
+	font-variant-numeric: tabular-nums;
+}
+
+.cc-week__col--today .cc-week__daynum {
+	font-weight: 600;
+}
+
+/* The positioning context for the day's events; height comes from the grid. */
+.cc-week__lane {
+	position: absolute;
+	inset: 0;
+}
+
+.cc-week__col--today .cc-week__lane {
+	background: rgba(255, 255, 255, 0.02);
+}
+
+/* left/width are set inline from laneAssign; a 1px inset keeps neighbouring
+   lanes from sharing a border and reading as one block. */
+.cc-week__event {
+	position: absolute;
+	box-sizing: border-box;
+	overflow: hidden;
+	padding: 2px 4px;
+	background: var(--cc-glass);
+	border: 1px solid var(--cc-hairline);
+	border-radius: 3px;
+	font-size: 10px;
+	line-height: 1.2;
+}
+
+.cc-week__event-title {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--cc-text);
+}
+
+.cc-week__event--point {
+	background: transparent;
+	border-style: dashed;
+}
+
+/* The Day/Week switch in the card header. */
+.cc-week__switch {
+	display: inline-flex;
+	gap: 2px;
+	margin-left: 8px;
+}
+
+.cc-week__switch-btn {
+	padding: 1px 7px;
+	background: transparent;
+	border: 1px solid var(--cc-hairline);
+	border-radius: 3px;
+	color: var(--cc-text-dim);
+	font-size: 10px;
+	cursor: pointer;
+}
+
+.cc-week__switch-btn.is-on {
+	background: var(--cc-glass);
+	color: var(--cc-text);
+}
+
+/* The week grid needs more width than the 300px the Day rail gets. */
+.cc-build > .cc-day:has(.cc-week) {
+	flex: 1 1 420px;
+}

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { parseCalendar, toISODate } from "./calendar";
+import {
+	parseCalendar,
+	toISODate,
+	eventsOnDay,
+	eventsInRange,
+	weekDatesFor,
+	addDaysISO,
+} from "./calendar";
 
 /* Every test passes `today` explicitly: the floating-date rule below is the
    whole point, and it must be observable without faking the clock. */
@@ -277,5 +284,113 @@ describe("toISODate", () => {
 
 	it("zero-pads month and day", () => {
 		expect(toISODate(new Date(2026, 0, 5))).toBe("2026-01-05");
+	});
+});
+
+/* ------------------------------------------------------------------------- */
+/* View filtering — ONE rule shared by Day and Week. A day is a range of one, */
+/* so the two views cannot drift apart on what belongs on screen.            */
+/* ------------------------------------------------------------------------- */
+
+const week = [
+	"## 2026-05-24", // Sunday — previous week
+	"- 09:00 · Sun",
+	"## 2026-05-25", // Monday
+	"- 09:00 · Mon",
+	"## 2026-05-27", // Wednesday
+	"- 09:00 · Wed",
+	"## 2026-05-31", // Sunday — end of that week
+	"- 09:00 · Sun end",
+	"## 2026-06-01", // Monday — next week
+	"- 09:00 · Next Mon",
+].join("\n");
+
+describe("eventsOnDay", () => {
+	it("keeps only the named day", () => {
+		const out = eventsOnDay(parse(week), "2026-05-27");
+		expect(out.map((e) => e.title)).toEqual(["Wed"]);
+	});
+
+	it("returns nothing for a day with no events", () => {
+		expect(eventsOnDay(parse(week), "2026-05-26")).toEqual([]);
+	});
+
+	it("does not leak the neighbouring days", () => {
+		/* The regression this guards: a filter loosened to >= or a range that
+		   forgets its upper bound would drag the rest of the file onto one
+		   rail. */
+		const out = eventsOnDay(parse(week), "2026-05-25");
+		expect(out.map((e) => e.title)).toEqual(["Mon"]);
+	});
+});
+
+describe("eventsInRange", () => {
+	it("is inclusive at both ends", () => {
+		const out = eventsInRange(parse(week), "2026-05-25", "2026-05-31");
+		expect(out.map((e) => e.title)).toEqual(["Mon", "Wed", "Sun end"]);
+	});
+
+	it("excludes the days either side of the range", () => {
+		const out = eventsInRange(parse(week), "2026-05-25", "2026-05-31");
+		expect(out.map((e) => e.title)).not.toContain("Sun");
+		expect(out.map((e) => e.title)).not.toContain("Next Mon");
+	});
+
+	it("returns nothing for an empty week", () => {
+		expect(eventsInRange(parse(week), "2026-08-03", "2026-08-09")).toEqual([]);
+	});
+});
+
+describe("weekDatesFor", () => {
+	it("returns seven consecutive days starting Monday", () => {
+		expect(weekDatesFor("2026-05-27")).toEqual([
+			"2026-05-25",
+			"2026-05-26",
+			"2026-05-27",
+			"2026-05-28",
+			"2026-05-29",
+			"2026-05-30",
+			"2026-05-31",
+		]);
+	});
+
+	it("treats Sunday as the END of its week, not the start", () => {
+		/* getDay() calls Sunday 0; a Monday-based grid has to map it to 6 or
+		   every Sunday jumps a week forward. */
+		expect(weekDatesFor("2026-05-31")[0]).toBe("2026-05-25");
+		expect(weekDatesFor("2026-05-31")[6]).toBe("2026-05-31");
+	});
+
+	it("is stable for every day of one week", () => {
+		const expected = weekDatesFor("2026-05-25");
+		for (const d of expected) {
+			expect(weekDatesFor(d)).toEqual(expected);
+		}
+	});
+
+	it("crosses a month boundary", () => {
+		expect(weekDatesFor("2026-06-01")).toEqual([
+			"2026-06-01",
+			"2026-06-02",
+			"2026-06-03",
+			"2026-06-04",
+			"2026-06-05",
+			"2026-06-06",
+			"2026-06-07",
+		]);
+	});
+});
+
+describe("addDaysISO", () => {
+	it("rolls over a month end", () => {
+		expect(addDaysISO("2026-05-31", 1)).toBe("2026-06-01");
+	});
+
+	it("rolls over a year end backwards", () => {
+		expect(addDaysISO("2026-01-01", -1)).toBe("2025-12-31");
+	});
+
+	it("handles a leap day", () => {
+		expect(addDaysISO("2028-02-28", 1)).toBe("2028-02-29");
 	});
 });

@@ -33,6 +33,37 @@ export function toISODate(d: Date): string {
 	return `${y}-${m}-${day}`;
 }
 
+/* ISO dates are fixed-width and zero-padded, so lexical order IS date order
+   and a range check needs no Date objects at all. */
+export function eventsInRange(
+	events: CalEvent[],
+	fromISO: string,
+	toISO: string
+): CalEvent[] {
+	return events.filter((ev) => ev.date >= fromISO && ev.date <= toISO);
+}
+
+/* The one filter both views use. A day is just a week of length one, so Day
+   and Week can never drift apart on what "belongs to this view" means. */
+export function eventsOnDay(events: CalEvent[], dayISO: string): CalEvent[] {
+	return eventsInRange(events, dayISO, dayISO);
+}
+
+export function addDaysISO(iso: string, days: number): string {
+	const [y, m, d] = iso.split("-").map(Number);
+	/* Day-of-month arithmetic on a local Date rolls months and years for us. */
+	return toISODate(new Date(y, m - 1, d + days));
+}
+
+/* The seven dates of the Monday-based week containing `iso`. */
+export function weekDatesFor(iso: string): string[] {
+	const [y, m, d] = iso.split("-").map(Number);
+	const dow = new Date(y, m - 1, d).getDay(); // 0 = Sunday
+	const backToMonday = (dow + 6) % 7; // Monday → 0, Sunday → 6
+	const monday = addDaysISO(iso, -backToMonday);
+	return Array.from({ length: 7 }, (_, i) => addDaysISO(monday, i));
+}
+
 /* "## 2026-07-19" — any heading level, nothing else on the line. */
 const DATE_HEADING = /^#{1,6}\s+(\d{4})-(\d{2})-(\d{2})\s*$/;
 

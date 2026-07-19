@@ -26,7 +26,14 @@ import type {
 	RedditItem,
 	TweetItem,
 } from "./data-sources/feeds";
-import { CALENDAR_PATH, loadCalendar, toISODate } from "./data-sources/calendar";
+import {
+	CALENDAR_PATH,
+	loadCalendar,
+	toISODate,
+	eventsOnDay,
+	weekDatesFor,
+} from "./data-sources/calendar";
+import { laneAssign } from "./lanes";
 import type { CalEvent } from "./data-sources/calendar";
 
 /* `id` is the storage key — phase 5 writes command-center/todos/{id}.md.
@@ -315,7 +322,7 @@ function DayView({
 	   from `now`, so crossing midnight with the view open rolls it over on the
 	   next tick instead of stranding yesterday on screen. */
 	const today = toISODate(new Date(now));
-	const events = allEvents.filter((ev) => ev.date === today);
+	const events = eventsOnDay(allEvents, today);
 
 	const hours: number[] = [];
 	for (let h = RAIL_START_MIN / 60; h <= RAIL_END_MIN / 60; h++) hours.push(h);
@@ -327,20 +334,14 @@ function DayView({
 	const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
 	const nowInRange = nowMin >= RAIL_START_MIN && nowMin <= RAIL_END_MIN;
 
+	/* The card shell and the header live in CalendarPanel, which owns the
+	   Day/Week switch; this component renders only the rail itself. */
 	return (
-		<div className="cc-day cc-card">
-			<div className="cc-feed__head">
-				<span className="cc-feed__title">Today</span>
-				<span className="cc-feed__meta">
-					<span className="cc-feed__count">{events.length}</span>
-				</span>
-			</div>
-
-			<div className="cc-day__scroll">
-				{events.length === 0 ? (
-					<p className="cc-feed__empty">
-						No events — add lines in {CALENDAR_PATH}
-					</p>
+		<div className="cc-day__scroll">
+			{events.length === 0 ? (
+				<p className="cc-feed__empty">
+					No events — add lines in {CALENDAR_PATH}
+				</p>
 				) : (
 					<div className="cc-day__rail" style={{ height: `${railPx}px` }}>
 						{hours.map((h) => (
@@ -431,7 +432,213 @@ function DayView({
 						)}
 					</div>
 				)}
+		</div>
+	);
+}
+
+/* Weekday initials for the column heads; index 0 is Monday, matching
+   weekDatesFor(). */
+const DOW_LABEL = ["M", "T", "W", "T", "F", "S", "S"];
+
+/* One day column of the week grid: the same rail as the Day view, but events
+   are packed into columns by laneAssign so collisions sit side by side. */
+function WeekColumn({
+	dayISO,
+	events,
+	isToday,
+	nowMin,
+	dowIndex,
+}: {
+	dayISO: string;
+	events: CalEvent[];
+	isToday: boolean;
+	nowMin: number;
+	dowIndex: number;
+}) {
+	/* laneAssign is called PER COLUMN, never across the week: each day is its
+	   own collision space, so a busy Monday must not narrow a quiet Thursday. */
+	const placed = laneAssign(events);
+
+	const nowInRange = nowMin >= RAIL_START_MIN && nowMin <= RAIL_END_MIN;
+	const dayNum = Number(dayISO.slice(8, 10));
+
+	return (
+		<div className={isToday ? "cc-week__col cc-week__col--today" : "cc-week__col"}>
+			<div className="cc-week__colhead">
+				<span className="cc-week__dow">{DOW_LABEL[dowIndex]}</span>
+				<span className="cc-week__daynum">{dayNum}</span>
 			</div>
+
+			<div className="cc-week__lane">
+				{events.map((ev, i) => {
+					const { lane, laneCount } = placed[i];
+					const top = minToTop(ev.startMin);
+					const isPoint = ev.endMin === null;
+					const height =
+						ev.endMin === null
+							? POINT_PX
+							: Math.max(
+									POINT_PX,
+									((ev.endMin - ev.startMin) / 60) * HOUR_PX
+							  );
+
+					/* laneCount is always >= 1 for a placed event, but a stray 0
+					   would divide by zero and hand CSS "Infinity%", which it
+					   drops — taking the width declaration with it and letting
+					   the block span the whole column. Clamp instead. */
+					const columns = Math.max(1, laneCount);
+					const widthPct = 100 / columns;
+
+					const timeLabel = ev.end ? `${ev.start}–${ev.end}` : ev.start;
+					const tooltip = ev.tag
+						? `${timeLabel} · ${ev.title} · ${ev.tag}`
+						: `${timeLabel} · ${ev.title}`;
+
+					return (
+						<div
+							key={i}
+							className={
+								isPoint
+									? "cc-week__event cc-week__event--point"
+									: "cc-week__event"
+							}
+							style={{
+								top: `${top}px`,
+								height: `${height}px`,
+								left: `${lane * widthPct}%`,
+								width: `${widthPct}%`,
+							}}
+							title={tooltip}
+						>
+							<span className="cc-week__event-title">{ev.title}</span>
+						</div>
+					);
+				})}
+
+				{isToday && nowInRange && (
+					<div
+						className="cc-day__now"
+						style={{ top: `${minToTop(nowMin)}px` }}
+					/>
+				)}
+			</div>
+		</div>
+	);
+}
+
+/* Exported for the render test below app.tsx; nothing else imports it. */
+export function WeekView({
+	events: allEvents,
+	now,
+}: {
+	events: CalEvent[];
+	now: number;
+}) {
+	const railPx = minToTop(RAIL_END_MIN);
+	const today = toISODate(new Date(now));
+	const days = weekDatesFor(today);
+
+	const nowDate = new Date(now);
+	const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
+
+	const hours: number[] = [];
+	for (let h = RAIL_START_MIN / 60; h <= RAIL_END_MIN / 60; h++) hours.push(h);
+
+	/* Same filter the Day view uses, applied seven times — one shared rule, so
+	   the two views can never disagree about what belongs on screen. */
+	const perDay = days.map((d) => eventsOnDay(allEvents, d));
+	const total = perDay.reduce((n, list) => n + list.length, 0);
+
+	return (
+		<div className="cc-week">
+			<div className="cc-week__scroll">
+				{total === 0 ? (
+					<p className="cc-feed__empty">
+						Nothing this week — add lines in {CALENDAR_PATH}
+					</p>
+				) : (
+					<div className="cc-week__grid" style={{ height: `${railPx}px` }}>
+						<div className="cc-week__hours">
+							{hours.map((h) => (
+								<div
+									key={h}
+									className="cc-day__hour"
+									style={{ top: `${minToTop(h * 60)}px` }}
+								>
+									<span className="cc-day__hour-label">
+										{String(h).padStart(2, "0")}:00
+									</span>
+								</div>
+							))}
+						</div>
+
+						{days.map((d, i) => (
+							<WeekColumn
+								key={d}
+								dayISO={d}
+								events={perDay[i]}
+								isToday={d === today}
+								nowMin={nowMin}
+								dowIndex={i}
+							/>
+						))}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
+/* Holds the Day/Week switch. The mode is component state, not a vault file:
+   writing it would need the save + echo-suppression machinery, and that is
+   Phase 6c. Switching tabs away and back resets to Day, which is fine. */
+function CalendarPanel({ events, now }: { events: CalEvent[]; now: number }) {
+	const [mode, setMode] = useState<"day" | "week">("day");
+
+	const todayCount = eventsOnDay(events, toISODate(new Date(now))).length;
+
+	return (
+		<div className="cc-day cc-card">
+			<div className="cc-feed__head">
+				<span className="cc-feed__title">
+					{mode === "day" ? "Today" : "This week"}
+				</span>
+				<span className="cc-feed__meta">
+					{mode === "day" && (
+						<span className="cc-feed__count">{todayCount}</span>
+					)}
+					<span className="cc-week__switch">
+						<button
+							type="button"
+							className={
+								mode === "day"
+									? "cc-week__switch-btn is-on"
+									: "cc-week__switch-btn"
+							}
+							onClick={() => setMode("day")}
+						>
+							Day
+						</button>
+						<button
+							type="button"
+							className={
+								mode === "week"
+									? "cc-week__switch-btn is-on"
+									: "cc-week__switch-btn"
+							}
+							onClick={() => setMode("week")}
+						>
+							Week
+						</button>
+					</span>
+				</span>
+			</div>
+
+			{mode === "day" ? (
+				<DayView events={events} now={now} />
+			) : (
+				<WeekView events={events} now={now} />
+			)}
 		</div>
 	);
 }
@@ -573,7 +780,7 @@ function TabPanel({
 		case "build":
 			return (
 				<div className="cc-build">
-					<DayView events={events} now={now} />
+					<CalendarPanel events={events} now={now} />
 					<BuildFeeds
 						hn={hn}
 						reddit={reddit}
