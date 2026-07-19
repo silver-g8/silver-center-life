@@ -47,9 +47,14 @@ Vault: /home/sg8/SilverCenterLife
   diff จะเด้ง 24k บรรทัดสลับไปมาทุก commit — เลือกวิธีนี้แทนการ gitignore main.js แล้ว (2026-07-16)
 
 ## Tests — IMPORTANT
-- `npm test` = `vitest run` · 19 tests / 2 ไฟล์ (2026-07-19)
+- `npm test` = `vitest run` · 76 tests / 4 ไฟล์ (2026-07-19)
 - `src/data-sources/calendar.test.ts` — parseCalendar: block/point/single-digit hour,
-  drop backwards + zero-length + out-of-range + malformed end + empty title, sort ascending
+  drop backwards + zero-length + out-of-range + malformed end + empty title, sort ascending,
+  date heading (floating / merge ซ้ำ / heading เสียทิ้งทั้ง section), lineIndex,
+  ยัง cover toISODate + eventsOnDay/eventsInRange + weekDatesFor + addDaysISO
+- `src/lanes.test.ts` — laneAssign: นิยาม collision, cluster, point event, invariant ที่ view พึ่ง
+- `src/week-view.test.tsx` — WeekView ผ่าน DOM จริง: empty state, lane geometry (left/width %),
+  ช่วง 7 วันที่แสดง
 - `src/data-sources/feeds.test.ts` — createFeed: TTL hit/expire, in-flight dedup,
   stale fallback, cold-failure, retry-after-stale · parseTweets 3 เคส
 - `obsidian` เป็น package types-only (`main: ""`) import ตอน test แล้วพัง
@@ -66,8 +71,10 @@ Vault: /home/sg8/SilverCenterLife
 - **6a** = อ่าน calendar.md + Day view ✅ เสร็จแล้ว
 - **6b** = **Week view — layout ล้วน ยัง read-only ไม่แตะ persistence**
 - **6c** = เขียนผ่าน UI — จุดที่ echo-suppression/save กลับมา
-  ก่อนเริ่ม 6c ต้องเปลี่ยน `key={i}` ใน DayView (src/app.tsx:369) เป็น id จริงก่อน
-  ไม่งั้น React จับคู่แถวผิดตอนลบ/แทรก
+  prerequisite `key={i}` ✅ เสร็จแล้ว (2026-07-19) — `CalEvent.lineIndex` = บรรทัดจริงใน
+  calendar.md, Day + Week view key ด้วยตัวนี้ · lineIndex เป็น anchor ที่ 6c เขียนกลับด้วย
+  (แก้/ลบ event = rewrite บรรทัดนั้น) · ระวัง: หลัง write ต้อง re-parse ใหม่ทั้งไฟล์
+  lineIndex ของ event อื่นเลื่อนทันทีที่แทรก/ลบบรรทัด ห้าม cache ข้ามการเขียน
 - ถ้าสั่งแค่ "ทำ 6b" ให้ยึดนิยามข้างบนนี้ ห้ามเดาว่าเป็น Day view แบบเขียนได้
 
 ## Status

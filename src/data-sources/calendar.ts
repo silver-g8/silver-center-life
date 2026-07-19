@@ -21,6 +21,12 @@ export type CalEvent = {
 	tag: string | null;
 	startMin: number; // minutes from midnight — for layout math
 	endMin: number | null; // minutes from midnight, or null for a point event
+	/* 0-based line in calendar.md this event was parsed from. Stable identity:
+	   the events array is sorted, so an array index shifts whenever an earlier
+	   line changes and React would then re-key surviving rows onto the wrong
+	   DOM node on insert/delete. Also the anchor Phase 6c writes back through —
+	   edit or remove an event by rewriting exactly this line. */
+	lineIndex: number;
 };
 
 /* Local calendar date as "YYYY-MM-DD".
@@ -133,8 +139,9 @@ export function parseCalendar(
 	   exist — see decision 3. */
 	let current: string | null = today;
 
-	for (const line of raw.split("\n")) {
-		const trimmed = line.trim();
+	const lines = raw.split("\n");
+	for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+		const trimmed = lines[lineIndex].trim();
 
 		const heading = DATE_HEADING.exec(trimmed);
 		if (heading) {
@@ -186,6 +193,7 @@ export function parseCalendar(
 			tag,
 			startMin,
 			endMin,
+			lineIndex,
 		});
 	}
 

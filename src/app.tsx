@@ -356,7 +356,7 @@ function DayView({
 							</div>
 						))}
 
-						{events.map((ev, i) => {
+						{events.map((ev) => {
 							const top = minToTop(ev.startMin);
 							const isPoint = ev.endMin === null;
 							const height =
@@ -380,7 +380,7 @@ function DayView({
 
 							return (
 								<div
-									key={i}
+									key={ev.lineIndex}
 									className={
 										isPoint
 											? "cc-day__event cc-day__event--point"
@@ -496,7 +496,7 @@ function WeekColumn({
 
 					return (
 						<div
-							key={i}
+							key={ev.lineIndex}
 							className={
 								isPoint
 									? "cc-week__event cc-week__event--point"

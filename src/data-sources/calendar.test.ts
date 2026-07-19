@@ -28,6 +28,7 @@ describe("parseCalendar — events it keeps", () => {
 				tag: "build",
 				startMin: 540,
 				endMin: 630,
+				lineIndex: 0,
 			},
 		]);
 	});
@@ -42,6 +43,7 @@ describe("parseCalendar — events it keeps", () => {
 				tag: null,
 				startMin: 840,
 				endMin: null,
+				lineIndex: 0,
 			},
 		]);
 	});
@@ -392,5 +394,46 @@ describe("addDaysISO", () => {
 
 	it("handles a leap day", () => {
 		expect(addDaysISO("2028-02-28", 1)).toBe("2028-02-29");
+	});
+});
+
+/* lineIndex is what the views key on and what Phase 6c will rewrite through,
+   so it has to be the real line in the file — not the position in the sorted
+   result, and not a counter that skips the lines the parser walks past. */
+describe("parseCalendar — lineIndex", () => {
+	it("counts headings, blanks and dropped lines", () => {
+		const raw = [
+			"## 2026-07-19", // 0
+			"", // 1
+			"- 25:99 · Impossible", // 2 — dropped
+			"- 09:00 · Standup", // 3
+		].join("\n");
+
+		expect(parse(raw).map((ev) => ev.lineIndex)).toEqual([3]);
+	});
+
+	it("survives the sort — file order and result order can disagree", () => {
+		/* Later line, earlier time: sorting puts it first, so an array index
+		   would label it 0 and collide with nothing meaningful. */
+		const raw = ["- 17:00 · Evening", "- 08:00 · Morning"].join("\n");
+
+		const evs = parse(raw);
+		expect(evs.map((ev) => ev.title)).toEqual(["Morning", "Evening"]);
+		expect(evs.map((ev) => ev.lineIndex)).toEqual([1, 0]);
+	});
+
+	it("stays unique across days that interleave in the file", () => {
+		const raw = [
+			"## 2026-07-20", // 0
+			"- 09:00 · Tue", // 1
+			"## 2026-07-19", // 2
+			"- 09:00 · Mon", // 3
+		].join("\n");
+
+		const evs = parse(raw);
+		/* Same start time, different days — sorted by date, so Mon comes first
+		   even though it is the later line. */
+		expect(evs.map((ev) => ev.title)).toEqual(["Mon", "Tue"]);
+		expect(new Set(evs.map((ev) => ev.lineIndex)).size).toBe(2);
 	});
 });
