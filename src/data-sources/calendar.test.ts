@@ -401,6 +401,44 @@ describe("addDaysISO", () => {
    so it has to be the real line in the file — not the position in the sorted
    result, and not a counter that skips the lines the parser walks past. */
 describe("parseCalendar — lineIndex", () => {
+	/* THE assertion 6c depends on: indexing the raw lines by lineIndex must hand
+	   back the very line the event came from. Everything else here checks the
+	   number; this checks that the number POINTS AT the right thing. An
+	   off-by-one from a heading or a blank line would mean 6c rewrites someone
+	   else's line — silent data loss in a hand-edited file. */
+	it("round-trips — raw.split()[lineIndex] is that event's own line", () => {
+		const raw = [
+			"# Notes", // 0 — not a date heading
+			"", // 1
+			"- 17:00 · Evening · home", // 2
+			"## 2026-07-20", // 3
+			"", // 4
+			"- 25:99 · Impossible", // 5 — dropped
+			"- 09:00-10:00 · Tue standup · work", // 6
+			"## 2026-07-19", // 7
+			"- 08:00 · Morning", // 8
+		].join("\n");
+
+		const lines = raw.split("\n");
+
+		for (const ev of parse(raw)) {
+			const line = lines[ev.lineIndex];
+			expect(line).toContain(ev.title);
+			expect(line).toContain(ev.start);
+		}
+
+		/* Pin the exact mapping too, so a parser change that keeps every line
+		   merely "containing" the title still has to stay honest. */
+		const byTitle = Object.fromEntries(
+			parse(raw).map((ev) => [ev.title, ev.lineIndex])
+		);
+		expect(byTitle).toEqual({
+			Evening: 2,
+			"Tue standup": 6,
+			Morning: 8,
+		});
+	});
+
 	it("counts headings, blanks and dropped lines", () => {
 		const raw = [
 			"## 2026-07-19", // 0

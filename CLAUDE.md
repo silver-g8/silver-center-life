@@ -47,7 +47,7 @@ Vault: /home/sg8/SilverCenterLife
   diff จะเด้ง 24k บรรทัดสลับไปมาทุก commit — เลือกวิธีนี้แทนการ gitignore main.js แล้ว (2026-07-16)
 
 ## Tests — IMPORTANT
-- `npm test` = `vitest run` · 76 tests / 4 ไฟล์ (2026-07-19)
+- `npm test` = `vitest run` · 77 tests / 4 ไฟล์ (2026-07-19)
 - `src/data-sources/calendar.test.ts` — parseCalendar: block/point/single-digit hour,
   drop backwards + zero-length + out-of-range + malformed end + empty title, sort ascending,
   date heading (floating / merge ซ้ำ / heading เสียทิ้งทั้ง section), lineIndex,
@@ -86,9 +86,13 @@ Vault: /home/sg8/SilverCenterLife
 - Phase 7 ✅ live feeds บน Build tab (HN + Reddit + tweets.md) — src/data-sources/feeds.ts
   cache 10m TTL + in-flight guard + stale fallback · refresh interval แยกจาก timer 1 วิ · tweets เข้า watcher ตัวเดิม
   runtime verify: เปิด/ปิด view 5 รอบ → MOUNT=CLEANUP interval ไม่งอก ✅ (2026-07-18)
+  ↑ อันนี้เป็น **manual check ครั้งเดียว ไม่มี test คุม** — ไม่ re-verify เองตอน `npm test`
+  ถ้าแก้ effect/cleanup ของ feeds ต้องเปิด/ปิด view ดูใหม่ด้วยตา grep ไม่ช่วย
   offline stale ข้าม runtime — คุมด้วย vitest แล้ว (ดูหัวข้อ Tests ข้างล่าง)
   document.hidden guard: refresh ข้ามรอบเมื่อพับ/minimize Obsidian ประหยัด quota HN/Reddit (2026-07-18)
-- Phase 6a ✅ Day view read-only (src/app.tsx:304–424) + parser src/data-sources/calendar.ts
+- Phase 6a ✅ Day view read-only (`function DayView` ใน src/app.tsx) + parser src/data-sources/calendar.ts
+  อ้างด้วยชื่อ function ไม่ใช่เลขบรรทัด — ของเดิมเขียน `src/app.tsx:304–424` แล้วเลื่อนเป็น
+  311–437 หลัง Week view เลขบรรทัดใน doc เน่าทุกครั้งที่แก้ไฟล์ ห้ามใส่อีก (2026-07-19)
   parser ทิ้ง event ที่ end <= start (เช่น `- 15:00-09:00`) — data layer ส่งเฉพาะที่ layout ได้จริง
   UI ไม่ต้องแบกความรับผิดชอบนั้น สำคัญขึ้นตอน Week view ที่ block เล็กลง (2026-07-19)
 - ข้ามไปก่อน: racing seat (4), terminal pane (9), voice (10)
