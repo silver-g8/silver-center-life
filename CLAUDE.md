@@ -22,6 +22,12 @@ Vault: /home/sg8/SilverCenterLife
 - ทุก state เก็บเป็น markdown ธรรมดาใน command-center/ — ไม่มี DB
 
 ## Known trap
+- **`<button>` เปล่าโดนสกินของ Obsidian เสมอ** — background, box-shadow, padding
+  (ไม่ตั้ง border) ที่ specificity ซึ่ง **1 class (0-1-0) เอาไม่อยู่** ต้องใช้ 2 class
+  เช่น `.cc-week__col .cc-week__colhead` ไม่ใช่ `.cc-week__colhead`
+  อาการหลอก: reset 4 property แล้วติดแค่ `border` — ดูเหมือนกฎ "แก้ไม่ครบ" ทั้งที่จริงคือแพ้ specificity
+  เฉพาะ property ที่ Obsidian ตั้งชื่อไว้เท่านั้นที่โดนแย่ง
+  → เปลี่ยน element เป็น `<button>` เมื่อไหร่ ต้องเช็ค `getComputedStyle` เสมอ อย่าเดา (2026-07-19)
 - vault watcher + save-on-change ทำให้เกิดลูป (save → modify event → re-read → save)
   → echo suppression (hash) + debounce 300ms + skipSave ref กันรอบแรกหลัง hydrate
   ทุกไฟล์ใหม่ที่ persist ต้องใช้กลไกนี้ซ้ำ ห้ามสร้างตัวที่สองขนานกัน
