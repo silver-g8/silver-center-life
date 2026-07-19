@@ -61,6 +61,57 @@ export function addDaysISO(iso: string, days: number): string {
 	return toISODate(new Date(y, m - 1, d + days));
 }
 
+/* ---- navigation date math (Phase 6b.1) --------------------------------- *
+   Both functions are pure and live here beside addDaysISO/weekDatesFor rather
+   than in the view: there is ONE set of date math in this project and the
+   navigation buttons reuse it. Nothing below reads the clock — the caller
+   passes the time in, which is what makes the midnight cases testable.       */
+
+/* Which day the calendar is showing. `pinned` is null whenever the view is
+   following the clock, so "today" is re-resolved from clockMs on every call
+   instead of being captured once — leave the view open across midnight and it
+   rolls over rather than stranding the user on yesterday. */
+export function resolveDay(pinned: string | null, clockMs: number): string {
+	return pinned ?? toISODate(new Date(clockMs));
+}
+
+/* One step of the ‹ › buttons. Day mode moves a day, Week mode a whole week,
+   so in Week mode the anchor always lands on the same weekday and the grid
+   shifts by exactly one column-set. Month and year rollover come free from
+   addDaysISO. */
+export function stepDate(
+	iso: string,
+	mode: "day" | "week",
+	dir: -1 | 1
+): string {
+	return addDaysISO(iso, dir * (mode === "day" ? 1 : 7));
+}
+
+/* Every way the user can change the selected date, as one pure transition.
+   The ‹ › buttons, the Today button and a click on a week column head ALL go
+   through here — one place decides what the next state is, so the two paths
+   cannot drift apart and the tests only have to cover this function.
+
+   Returns the next `pinned` value: null means "following the clock". Landing
+   on today always returns null rather than today's date, which is why the view
+   resumes rolling over at midnight after you navigate back. */
+export function nextPinned(
+	pinned: string | null,
+	action: { type: "step"; mode: "day" | "week"; dir: -1 | 1 } | { type: "today" } | { type: "pick"; iso: string },
+	clockMs: number
+): string | null {
+	const todayISO = resolveDay(null, clockMs);
+
+	if (action.type === "today") return null;
+
+	const target =
+		action.type === "pick"
+			? action.iso
+			: stepDate(resolveDay(pinned, clockMs), action.mode, action.dir);
+
+	return target === todayISO ? null : target;
+}
+
 /* The seven dates of the Monday-based week containing `iso`. */
 export function weekDatesFor(iso: string): string[] {
 	const [y, m, d] = iso.split("-").map(Number);

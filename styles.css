@@ -690,6 +690,8 @@
 	min-width: 0;
 }
 
+/* A <button> since 6b.1 — clicking it opens that day. The reset is what keeps
+   it looking like the plain label it was before it became clickable. */
 .cc-week__colhead {
 	position: absolute;
 	top: -18px;
@@ -699,8 +701,19 @@
 	align-items: baseline;
 	justify-content: center;
 	gap: 3px;
+	padding: 0;
+	background: transparent;
+	border: 0;
+	border-radius: 3px;
+	font-family: inherit;
 	font-size: 10px;
 	color: var(--cc-text-dim);
+	cursor: pointer;
+}
+
+.cc-week__colhead:hover {
+	background: var(--cc-glass);
+	color: var(--cc-text);
 }
 
 .cc-week__col--today .cc-week__colhead {
@@ -772,6 +785,38 @@
 .cc-week__switch-btn.is-on {
 	background: var(--cc-glass);
 	color: var(--cc-text);
+}
+
+/* ‹ Today › — same pill language as the Day/Week switch, sitting to its left. */
+.cc-week__nav {
+	display: inline-flex;
+	gap: 2px;
+	margin-left: 8px;
+}
+
+.cc-week__nav-btn {
+	min-width: 18px;
+	padding: 1px 6px;
+	background: transparent;
+	border: 1px solid var(--cc-hairline);
+	border-radius: 3px;
+	color: var(--cc-text-dim);
+	font-family: inherit;
+	font-size: 10px;
+	line-height: 1.5;
+	cursor: pointer;
+}
+
+.cc-week__nav-btn:hover:not(:disabled) {
+	background: var(--cc-glass);
+	color: var(--cc-text);
+}
+
+/* Today is inert while the view is already following the clock: dimmed and
+   not clickable, so it never looks like a button that did nothing. */
+.cc-week__nav-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
 }
 
 /* Week mode restacks the Build tab: seven columns need the full width, so the

@@ -32,6 +32,9 @@ import {
 	toISODate,
 	eventsOnDay,
 	weekDatesFor,
+	resolveDay,
+	stepDate,
+	nextPinned,
 } from "./data-sources/calendar";
 import { laneAssign } from "./lanes";
 import type { CalEvent } from "./data-sources/calendar";
@@ -308,31 +311,44 @@ function minToTop(min: number): number {
 	return ((min - RAIL_START_MIN) / 60) * HOUR_PX;
 }
 
-function DayView({
+/* Exported for the render test; nothing else imports it. */
+export function DayView({
 	events: allEvents,
 	now,
+	dayISO,
+	todayISO,
 }: {
 	events: CalEvent[];
 	now: number;
+	dayISO: string;
+	todayISO: string;
 }) {
 	const railPx = minToTop(RAIL_END_MIN); // total rail height in px
 
 	/* calendar.md can now hold several days under "## YYYY-MM-DD" headings, so
-	   this rail — which is one day tall — has to take its own slice. Derived
-	   from `now`, so crossing midnight with the view open rolls it over on the
-	   next tick instead of stranding yesterday on screen. */
-	const today = toISODate(new Date(now));
-	const events = eventsOnDay(allEvents, today);
+	   this rail — which is one day tall — has to take its own slice. Which day
+	   is CalendarPanel's call now (6b.1 navigation), not this component's: it
+	   used to derive today from `now`, which made "show me another day"
+	   impossible to express. */
+	const events = eventsOnDay(allEvents, dayISO);
 
 	const hours: number[] = [];
 	for (let h = RAIL_START_MIN / 60; h <= RAIL_END_MIN / 60; h++) hours.push(h);
 
 	/* The now-line rides the timer's existing `now` — no interval of its own.
 	   While a focus block runs, `now` ticks each second and the line glides;
-	   when idle it simply sits at the last `now`, which is fine for a hint. */
+	   when idle it simply sits at the last `now`, which is fine for a hint.
+
+	   Which DAY the line belongs to comes from todayISO, which CalendarPanel
+	   resolves against the live clock — `now` freezes when the timer's interval
+	   is cleaned up, so after an idle evening it can still say yesterday, and
+	   the line would then be drawn on a day the user merely navigated to. */
 	const nowDate = new Date(now);
 	const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
-	const nowInRange = nowMin >= RAIL_START_MIN && nowMin <= RAIL_END_MIN;
+	const nowInRange =
+		dayISO === todayISO &&
+		nowMin >= RAIL_START_MIN &&
+		nowMin <= RAIL_END_MIN;
 
 	/* The card shell and the header live in CalendarPanel, which owns the
 	   Day/Week switch; this component renders only the rail itself. */
@@ -448,12 +464,14 @@ function WeekColumn({
 	isToday,
 	nowMin,
 	dowIndex,
+	onPickDay,
 }: {
 	dayISO: string;
 	events: CalEvent[];
 	isToday: boolean;
 	nowMin: number;
 	dowIndex: number;
+	onPickDay?: (iso: string) => void;
 }) {
 	/* laneAssign is called PER COLUMN, never across the week: each day is its
 	   own collision space, so a busy Monday must not narrow a quiet Thursday. */
@@ -464,10 +482,19 @@ function WeekColumn({
 
 	return (
 		<div className={isToday ? "cc-week__col cc-week__col--today" : "cc-week__col"}>
-			<div className="cc-week__colhead">
+			{/* Clicking the head opens that day. It routes through the SAME
+			    onPickDay → dispatch → nextPinned path the ‹ › buttons use, so
+			    there is one way to change the selected date, not two that can
+			    drift apart. */}
+			<button
+				type="button"
+				className="cc-week__colhead"
+				onClick={() => onPickDay?.(dayISO)}
+				title={`Open ${dayISO}`}
+			>
 				<span className="cc-week__dow">{DOW_LABEL[dowIndex]}</span>
 				<span className="cc-week__daynum">{dayNum}</span>
-			</div>
+			</button>
 
 			<div className="cc-week__lane">
 				{events.map((ev, i) => {
@@ -530,13 +557,24 @@ function WeekColumn({
 export function WeekView({
 	events: allEvents,
 	now,
+	anchorISO,
+	todayISO,
+	onPickDay,
 }: {
 	events: CalEvent[];
 	now: number;
+	anchorISO: string;
+	todayISO: string;
+	onPickDay?: (iso: string) => void;
 }) {
 	const railPx = minToTop(RAIL_END_MIN);
-	const today = toISODate(new Date(now));
-	const days = weekDatesFor(today);
+	/* The week shown follows the anchor the user navigated to; "today" is a
+	   separate question, answered by CalendarPanel from the live clock — so the
+	   today column stops being highlighted once you page away from this week.
+	   Both arrive as props: this component reads no clock, which is what lets
+	   the render tests below pin a date without faking timers. */
+	const today = todayISO;
+	const days = weekDatesFor(anchorISO);
 
 	const nowDate = new Date(now);
 	const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
@@ -580,6 +618,7 @@ export function WeekView({
 								isToday={d === today}
 								nowMin={nowMin}
 								dowIndex={i}
+								onPickDay={onPickDay}
 							/>
 						))}
 					</div>
@@ -595,18 +634,80 @@ export function WeekView({
 function CalendarPanel({ events, now }: { events: CalEvent[]; now: number }) {
 	const [mode, setMode] = useState<"day" | "week">("day");
 
-	const todayCount = eventsOnDay(events, toISODate(new Date(now))).length;
+	/* null = "follow the clock". Storing the OFFSET from today rather than a
+	   date would drift; storing today's date would freeze. Storing null means
+	   there is no captured date to go stale, so the midnight case cannot break
+	   by construction — resolveDay re-reads the clock every render. */
+	const [pinned, setPinned] = useState<string | null>(null);
+
+	/* Date.now(), not `now`: the timer's `now` freezes when its interval is
+	   cleaned up (pause/idle), and a frozen clock here would mean the Today
+	   button walks you to yesterday. See the Known trap note in CLAUDE.md. */
+	const todayISO = resolveDay(null, Date.now());
+	const selected = resolveDay(pinned, Date.now());
+
+	/* THE one setter. ‹ ›, Today and the week's column heads all dispatch here,
+	   and nextPinned — a pure function in calendar.ts — decides the result. The
+	   component holds no date logic at all, so the transitions are tested at
+	   that layer instead of through the DOM. */
+	const dispatch = (action: Parameters<typeof nextPinned>[1]) =>
+		setPinned(nextPinned(pinned, action, Date.now()));
+
+	const step = (dir: -1 | 1) => dispatch({ type: "step", mode, dir });
+
+	const dayCount = eventsOnDay(events, selected).length;
+
+	/* Day mode names the day; week mode names the week by its Monday. */
+	const heading =
+		mode === "day"
+			? selected === todayISO
+				? "Today"
+				: selected
+			: weekDatesFor(selected)[0] === weekDatesFor(todayISO)[0]
+				? "This week"
+				: `Week of ${weekDatesFor(selected)[0]}`;
 
 	return (
 		<div className="cc-day cc-card">
 			<div className="cc-feed__head">
-				<span className="cc-feed__title">
-					{mode === "day" ? "Today" : "This week"}
-				</span>
+				<span className="cc-feed__title">{heading}</span>
 				<span className="cc-feed__meta">
 					{mode === "day" && (
-						<span className="cc-feed__count">{todayCount}</span>
+						<span className="cc-feed__count">{dayCount}</span>
 					)}
+
+					{/* ‹ Today › — Today is inert while the view is already
+					    following the clock (pinned === null), so it is not a
+					    button that sometimes does nothing with no explanation. */}
+					<span className="cc-week__nav">
+						<button
+							type="button"
+							className="cc-week__nav-btn"
+							onClick={() => step(-1)}
+							title={mode === "day" ? "Previous day" : "Previous week"}
+							aria-label={mode === "day" ? "Previous day" : "Previous week"}
+						>
+							‹
+						</button>
+						<button
+							type="button"
+							className="cc-week__nav-btn cc-week__nav-today"
+							onClick={() => dispatch({ type: "today" })}
+							disabled={pinned === null}
+							title="Back to today"
+						>
+							Today
+						</button>
+						<button
+							type="button"
+							className="cc-week__nav-btn"
+							onClick={() => step(1)}
+							title={mode === "day" ? "Next day" : "Next week"}
+							aria-label={mode === "day" ? "Next day" : "Next week"}
+						>
+							›
+						</button>
+					</span>
 					<span className="cc-week__switch">
 						<button
 							type="button"
@@ -635,9 +736,26 @@ function CalendarPanel({ events, now }: { events: CalEvent[]; now: number }) {
 			</div>
 
 			{mode === "day" ? (
-				<DayView events={events} now={now} />
+				<DayView
+					events={events}
+					now={now}
+					dayISO={selected}
+					todayISO={todayISO}
+				/>
 			) : (
-				<WeekView events={events} now={now} />
+				<WeekView
+					events={events}
+					now={now}
+					anchorISO={selected}
+					todayISO={todayISO}
+					/* Picking a day from the week grid jumps to that day AND
+					   switches to Day view — the click means "show me this
+					   day", which Week mode cannot express. */
+					onPickDay={(iso) => {
+						dispatch({ type: "pick", iso });
+						setMode("day");
+					}}
+				/>
 			)}
 		</div>
 	);

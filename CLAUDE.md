@@ -47,14 +47,24 @@ Vault: /home/sg8/SilverCenterLife
   diff จะเด้ง 24k บรรทัดสลับไปมาทุก commit — เลือกวิธีนี้แทนการ gitignore main.js แล้ว (2026-07-16)
 
 ## Tests — IMPORTANT
-- `npm test` = `vitest run` · 77 tests / 4 ไฟล์ (2026-07-19)
+- `npm test` = `vitest run` · 104 tests / 4 ไฟล์ (2026-07-19)
+- **ไม่มี jsdom / testing-library** — `environment: "node"` render test ใช้
+  `renderToStaticMarkup` = ยิง props เข้าไปแล้วอ่าน HTML **คลิกไม่ได้**
+  → logic ที่ต้องคุมด้วย test ห้ามฝังใน onClick ยกเป็น pure fn (เช่น `nextPinned`) แล้วยิงที่ชั้นนั้น
+  ตอนนี้เส้นที่ไม่มี test คุมคือ "onClick ต่อสายเข้า dispatch ถูกตัวจริงไหม" เท่านั้น
 - `src/data-sources/calendar.test.ts` — parseCalendar: block/point/single-digit hour,
   drop backwards + zero-length + out-of-range + malformed end + empty title, sort ascending,
   date heading (floating / merge ซ้ำ / heading เสียทิ้งทั้ง section), lineIndex,
   ยัง cover toISODate + eventsOnDay/eventsInRange + weekDatesFor + addDaysISO
+  · navigation 6b.1: resolveDay (midnight rollover), stepDate (ข้ามเดือน/ปี/leap,
+  week step ลงวันเดียวกันของสัปดาห์), nextPinned ทุก action + ยืนยันว่า pick กับ today
+  ให้ผลตรงกัน (เส้นเดียวจริง)
 - `src/lanes.test.ts` — laneAssign: นิยาม collision, cluster, point event, invariant ที่ view พึ่ง
-- `src/week-view.test.tsx` — WeekView ผ่าน DOM จริง: empty state, lane geometry (left/width %),
-  ช่วง 7 วันที่แสดง
+- `src/week-view.test.tsx` — WeekView + DayView ผ่าน static markup: empty state,
+  lane geometry (left/width %), ช่วง 7 วันที่แสดง, anchorISO/dayISO/todayISO ขับอะไรบ้าง,
+  now-line วาดเฉพาะวันนี้
+  · เตือน: week ที่ไม่มี event **ไม่ render grid เลย** assert `not.toContain("--today")`
+    บน week ว่างจะผ่านแบบว่างเปล่า ทุกเคสที่วัดคอลัมน์ต้องใส่ event จริง (กัดมาแล้ว 2026-07-19)
 - `src/data-sources/feeds.test.ts` — createFeed: TTL hit/expire, in-flight dedup,
   stale fallback, cold-failure, retry-after-stale · parseTweets 3 เคส
 - `obsidian` เป็น package types-only (`main: ""`) import ตอน test แล้วพัง
@@ -70,6 +80,19 @@ Vault: /home/sg8/SilverCenterLife
 ## Phase 6 — ความหมายของเลข (pin ไว้ ห้ามตีความเอง)
 - **6a** = อ่าน calendar.md + Day view ✅ เสร็จแล้ว
 - **6b** = **Week view — layout ล้วน ยัง read-only ไม่แตะ persistence**
+- **6b.1** ✅ navigation read-only (2026-07-19) — ‹ Today › + คลิกหัวคอลัมน์ Week → เปิด Day วันนั้น
+  - state คือ `pinned: string | null` · **null = ตามนาฬิกา** ไม่ใช่เก็บวันที่ของวันนี้
+    เก็บ null แปลว่าไม่มีวันที่ให้ค้าง เปิดค้างข้ามเที่ยงคืนแล้วเลื่อนตามเอง by construction
+    ปุ่ม Today = กลับไป null (inert ตอน null อยู่แล้ว)
+  - ทางเปลี่ยนวันมีเส้นเดียว: ทุกปุ่ม → `dispatch()` → `nextPinned()` (pure fn ใน calendar.ts)
+    ห้ามเพิ่มเส้นที่สองที่ setPinned เอง ไม่งั้น test ต้องคุมสองทางแล้ววันหนึ่งมันจะ diverge
+  - date math ใช้ `addDaysISO`/`weekDatesFor` ตัวเดิม ไม่มีชุดสอง · verify แล้วว่า addDaysISO
+    pure จริง (รับ ISO string ไม่แตะนาฬิกา ไม่ใช่ `new Date().setDate()+n`)
+  - **component ไม่อ่านนาฬิกาเอง** — CalendarPanel อ่าน `Date.now()` ที่เดียวแล้วส่ง
+    `todayISO`/`dayISO`/`anchorISO` ลงเป็น prop ตอนแรกผมให้ DayView/WeekView เรียก
+    `Date.now()` เอง แล้ว render test fake วันไม่ได้ทันที — นั่นคือสัญญาณว่าวางผิดชั้น
+  - ใช้ `Date.now()` ไม่ใช่ `now` ของ timer: `now` แช่แข็งตอน interval ถูก cleanup
+    (ดู Known trap) ถ้าใช้ `now` ปุ่ม Today จะพากลับไปเมื่อวานหลังเปิดค้างทั้งคืน
 - **6c** = เขียนผ่าน UI — จุดที่ echo-suppression/save กลับมา
   prerequisite `key={i}` ✅ เสร็จแล้ว (2026-07-19) — `CalEvent.lineIndex` = บรรทัดจริงใน
   calendar.md, Day + Week view key ด้วยตัวนี้ · lineIndex เป็น anchor ที่ 6c เขียนกลับด้วย
