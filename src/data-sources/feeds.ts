@@ -135,7 +135,11 @@ async function redditRaw(): Promise<RedditItem[]> {
 /* One factory per source. It closes over that source's cache and its own
    in-flight promise, so the two sources never share either — a Reddit refresh
    can be running while Hacker News is served straight from cache. */
-function createFeed<T>(raw: () => Promise<T[]>): () => Promise<FeedResult<T>> {
+/* Exported for tests only — they build their own feed over a fake fetcher.
+   fetchHackerNews / fetchReddit below stay the app's entry points, unchanged. */
+export function createFeed<T>(
+	raw: () => Promise<T[]>
+): () => Promise<FeedResult<T>> {
 	let cache: { data: T[]; fetchedAt: number } | null = null;
 	let inFlight: Promise<FeedResult<T>> | null = null;
 

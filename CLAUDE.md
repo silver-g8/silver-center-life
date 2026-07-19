@@ -35,6 +35,7 @@ Vault: /home/sg8/SilverCenterLife
 ## Commands
 - `npm run dev` — esbuild watch, dev build (ปล่อยรันทิ้งไว้)
 - `npm run build` — typecheck + minified bundle
+- `npm test` — vitest run (ดูหัวข้อ Tests)
 - reload Obsidian: Ctrl+R · dev console: Ctrl+Shift+I
 
 ## Git / sync — IMPORTANT
@@ -44,6 +45,22 @@ Vault: /home/sg8/SilverCenterLife
 - **รัน `npm run build` ก่อน commit ทุกครั้ง** เพื่อให้ main.js ใน git เป็น minified เสมอ
   `npm run dev` เขียน main.js เป็น dev build (inline sourcemap ~24k บรรทัด) ถ้า commit ตอนนั้น
   diff จะเด้ง 24k บรรทัดสลับไปมาทุก commit — เลือกวิธีนี้แทนการ gitignore main.js แล้ว (2026-07-16)
+
+## Tests — IMPORTANT
+- `npm test` = `vitest run` · 19 tests / 2 ไฟล์ (2026-07-19)
+- `src/data-sources/calendar.test.ts` — parseCalendar: block/point/single-digit hour,
+  drop backwards + zero-length + out-of-range + malformed end + empty title, sort ascending
+- `src/data-sources/feeds.test.ts` — createFeed: TTL hit/expire, in-flight dedup,
+  stale fallback, cold-failure, retry-after-stale · parseTweets 3 เคส
+- `obsidian` เป็น package types-only (`main: ""`) import ตอน test แล้วพัง
+  → alias เป็น `test/obsidian-stub.ts` ใน `vitest.config.ts` · stub ตัวนี้ทำให้ `requestUrl` throw
+  โดยตั้งใจ ถ้า test ไหนยิงเน็ตจริงจะแดงทันที (feeds test ต้อง inject fake raw เข้า createFeed)
+- เวลาใน feeds test ใช้ `vi.useFakeTimers({ toFake: ["Date"] })` — **fake เฉพาะ Date**
+  ถ้า fake ทั้งชุด microtask จะแช่ → test in-flight dedup ค้างตาย
+- `createFeed` export ไว้เพื่อ test เท่านั้น · `fetchHackerNews`/`fetchReddit` คือทางที่ app ใช้
+- **ห้ามสรุปว่า "test ผ่าน" โดยไม่วาง output จริงของ `npm test`**
+  Phase 7 เคยอ้างว่ามี unit test 30 ข้อคุม offline-stale ทั้งที่ repo ไม่มี test เลย
+  path นั้นเลยลอยไม่ถูก verify ตั้งแต่ 2026-07-18 ถึง 2026-07-19
 
 ## Phase 6 — ความหมายของเลข (pin ไว้ ห้ามตีความเอง)
 - **6a** = อ่าน calendar.md + Day view ✅ เสร็จแล้ว
@@ -62,7 +79,7 @@ Vault: /home/sg8/SilverCenterLife
 - Phase 7 ✅ live feeds บน Build tab (HN + Reddit + tweets.md) — src/data-sources/feeds.ts
   cache 10m TTL + in-flight guard + stale fallback · refresh interval แยกจาก timer 1 วิ · tweets เข้า watcher ตัวเดิม
   runtime verify: เปิด/ปิด view 5 รอบ → MOUNT=CLEANUP interval ไม่งอก ✅ (2026-07-18)
-  offline stale ข้าม runtime — มี unit test คุม (stale fallback via Date.now time-travel)
+  offline stale ข้าม runtime — คุมด้วย vitest แล้ว (ดูหัวข้อ Tests ข้างล่าง)
   document.hidden guard: refresh ข้ามรอบเมื่อพับ/minimize Obsidian ประหยัด quota HN/Reddit (2026-07-18)
 - Phase 6a ✅ Day view read-only (src/app.tsx:304–424) + parser src/data-sources/calendar.ts
   parser ทิ้ง event ที่ end <= start (เช่น `- 15:00-09:00`) — data layer ส่งเฉพาะที่ layout ได้จริง
