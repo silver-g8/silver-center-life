@@ -552,10 +552,13 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* left/width come in inline from laneAssign (6b.2), exactly like the week
+   grid. They used to be `left: 0; right: 6px` here — with an inline left AND
+   width that becomes over-constrained and `right` is simply dropped, taking
+   the right-hand gutter with it, so the 6px now lives in the inline width
+   calc instead. */
 .cc-day__event {
 	position: absolute;
-	left: 0;
-	right: 6px;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;

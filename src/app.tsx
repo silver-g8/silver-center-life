@@ -332,6 +332,16 @@ export function DayView({
 	   impossible to express. */
 	const events = eventsOnDay(allEvents, dayISO);
 
+	/* Overlapping events sit side by side instead of stacking on top of each
+	   other (6b.2). laneAssign is the SAME function the week grid uses, called
+	   on the SAME per-day collision space — `events` is already narrowed to one
+	   day by eventsOnDay above, so a busy Tuesday can never narrow this rail.
+
+	   Week view had this from the start and Day view did not, which read as a
+	   joke: the narrow column laid collisions out correctly while the wide one
+	   drew them on top of each other. */
+	const placed = laneAssign(events);
+
 	const hours: number[] = [];
 	for (let h = RAIL_START_MIN / 60; h <= RAIL_END_MIN / 60; h++) hours.push(h);
 
@@ -372,7 +382,7 @@ export function DayView({
 							</div>
 						))}
 
-						{events.map((ev) => {
+						{events.map((ev, i) => {
 							const top = minToTop(ev.startMin);
 							const isPoint = ev.endMin === null;
 							const height =
@@ -383,6 +393,15 @@ export function DayView({
 											((ev.endMin - ev.startMin) / 60) *
 												HOUR_PX
 									  );
+
+							/* Percentages, not pixels: the Day rail is far wider
+							   than a week column, so a lane width copied from
+							   there would be wrong. Same clamp as the week grid —
+							   a stray 0 would make CSS drop the width declaration
+							   and the block would span the whole rail. */
+							const { lane, laneCount } = placed[i];
+							const columns = Math.max(1, laneCount);
+							const widthPct = 100 / columns;
 
 							const timeLabel = ev.end
 								? `${ev.start}–${ev.end}`
@@ -402,7 +421,16 @@ export function DayView({
 											? "cc-day__event cc-day__event--point"
 											: "cc-day__event"
 									}
-									style={{ top: `${top}px`, height: `${height}px` }}
+									style={{
+										top: `${top}px`,
+										height: `${height}px`,
+										left: `${lane * widthPct}%`,
+										/* 6px comes off the width, not from a
+										   CSS `right` — see the note on
+										   .cc-day__event. It doubles as the gap
+										   between neighbouring lanes. */
+										width: `calc(${widthPct}% - 6px)`,
+									}}
 									title={tooltip}
 								>
 									{isPoint ? (

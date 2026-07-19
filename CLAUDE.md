@@ -53,7 +53,7 @@ Vault: /home/sg8/SilverCenterLife
   diff จะเด้ง 24k บรรทัดสลับไปมาทุก commit — เลือกวิธีนี้แทนการ gitignore main.js แล้ว (2026-07-16)
 
 ## Tests — IMPORTANT
-- `npm test` = `vitest run` · 104 tests / 4 ไฟล์ (2026-07-19)
+- `npm test` = `vitest run` · 110 tests / 4 ไฟล์ (2026-07-19)
 - **ไม่มี jsdom / testing-library** — `environment: "node"` render test ใช้
   `renderToStaticMarkup` = ยิง props เข้าไปแล้วอ่าน HTML **คลิกไม่ได้**
   → logic ที่ต้องคุมด้วย test ห้ามฝังใน onClick ยกเป็น pure fn (เช่น `nextPinned`) แล้วยิงที่ชั้นนั้น
@@ -99,6 +99,15 @@ Vault: /home/sg8/SilverCenterLife
     `Date.now()` เอง แล้ว render test fake วันไม่ได้ทันที — นั่นคือสัญญาณว่าวางผิดชั้น
   - ใช้ `Date.now()` ไม่ใช่ `now` ของ timer: `now` แช่แข็งตอน interval ถูก cleanup
     (ดู Known trap) ถ้าใช้ `now` ปุ่ม Today จะพากลับไปเมื่อวานหลังเปิดค้างทั้งคืน
+- **6b.2** ✅ Day view แยกเลนเวลา event ทับกัน (2026-07-19) — เรียก `laneAssign` ตัวเดียวกับ Week
+  - **Day = 1 collision space** `eventsOnDay` ต้องกรองก่อน `laneAssign` เสมอ ห้ามส่ง event หลายวันเข้าไป
+  - ความกว้างคิดเป็น **%** ไม่ใช่ px — Day rail กว้างกว่า Week column มาก ค่า px ของ Week ใช้ร่วมไม่ได้
+  - `.cc-day__event` เดิมมี `left:0; right:6px` ใน CSS พอใส่ `left`+`width` inline จะ over-constrained
+    → เบราว์เซอร์ทิ้ง `right` ช่องว่างขวาหายเงียบ ๆ ย้าย 6px ไปอยู่ใน `calc(...% - 6px)` แทน
+  - **บั๊กนี้ test ชั้น logic มองไม่เห็นมาตลอด** — `laneAssign` มี test 16 ข้อและถูกทุกข้อ
+    แต่ test ทั้งหมดวิ่งผ่าน WeekView เท่านั้น Day view ไม่เคยถูก render ทดสอบเรื่องเลนเลย
+    จับได้เพราะเปิดจอจริง → **layout ต้องมี render test ของ *ทุก* view ที่ใช้ logic นั้น**
+    ไม่ใช่แค่ test ตัว logic (2026-07-19)
 - **6c** = เขียนผ่าน UI — จุดที่ echo-suppression/save กลับมา
   prerequisite `key={i}` ✅ เสร็จแล้ว (2026-07-19) — `CalEvent.lineIndex` = บรรทัดจริงใน
   calendar.md, Day + Week view key ด้วยตัวนี้ · lineIndex เป็น anchor ที่ 6c เขียนกลับด้วย

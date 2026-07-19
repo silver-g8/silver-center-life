@@ -223,3 +223,97 @@ describe("DayView — dayISO steers the day", () => {
 		expect(renderDay("2026-05-28")).not.toContain("cc-day__now");
 	});
 });
+
+/* ---- Phase 6b.2: Day view lanes ----------------------------------------- *
+   Week view had laneAssign from the start and Day view did not, and no test
+   noticed: the lane tests all went through WeekView. These render DayView for
+   the same collisions, so the two views cannot diverge on layout again.      */
+
+describe("DayView — overlapping events share the rail", () => {
+	const renderDay = (raw: string, dayISO = "2026-05-27") =>
+		renderToStaticMarkup(
+			<DayView
+				events={parseCalendar(raw, "2026-05-27")}
+				now={NOW}
+				dayISO={dayISO}
+				todayISO="2026-05-27"
+			/>
+		);
+
+	it("gives a lone event the full rail", () => {
+		const html = renderDay(["## 2026-05-27", "- 09:00-10:00 · Alone"].join("\n"));
+		expect(html).toContain("width:calc(100% - 6px)");
+		expect(html).toContain("left:0%");
+	});
+
+	it("splits two overlapping events into half-width lanes", () => {
+		/* The exact bug from the screenshot: 10:00-11:30 and 10:30-12:00 drew
+		   on top of each other, the second covering the first. */
+		const html = renderDay(
+			[
+				"## 2026-05-27",
+				"- 10:00-11:30 · First",
+				"- 10:30-12:00 · Second",
+			].join("\n")
+		);
+		expect(html).toContain("width:calc(50% - 6px)");
+		expect(html).toContain("left:0%");
+		expect(html).toContain("left:50%");
+		expect(html).not.toContain("width:calc(100% - 6px)");
+	});
+
+	it("keeps back-to-back events at full width", () => {
+		const html = renderDay(
+			[
+				"## 2026-05-27",
+				"- 09:00-10:00 · Before",
+				"- 10:00-11:00 · After",
+			].join("\n")
+		);
+		expect(html).toContain("width:calc(100% - 6px)");
+		expect(html).not.toContain("width:calc(50% - 6px)");
+	});
+
+	it("stacks three mutual overlaps into three lanes", () => {
+		const html = renderDay(
+			[
+				"## 2026-05-27",
+				"- 09:00-12:00 · A",
+				"- 09:30-12:30 · B",
+				"- 10:00-11:00 · C",
+			].join("\n")
+		);
+		expect(html).toContain("width:calc(33.333333333333336% - 6px)");
+	});
+
+	it("never widens a lane because another DAY is busy", () => {
+		/* Day is one collision space, not seven: eventsOnDay must narrow the
+		   list before laneAssign sees it, or a crowded neighbouring day would
+		   squeeze this rail. */
+		const html = renderDay(
+			[
+				"## 2026-05-26",
+				"- 09:00-12:00 · Busy A",
+				"- 09:30-12:30 · Busy B",
+				"- 10:00-11:00 · Busy C",
+				"## 2026-05-27",
+				"- 09:00-10:00 · Quiet",
+			].join("\n")
+		);
+		expect(html).toContain("Quiet");
+		expect(html).not.toContain("Busy");
+		expect(html).toContain("width:calc(100% - 6px)");
+	});
+
+	it("lays a point event out in a lane too", () => {
+		const html = renderDay(
+			[
+				"## 2026-05-27",
+				"- 10:00-11:00 · Block",
+				"- 10:15 · Point",
+			].join("\n")
+		);
+		expect(html).toContain("width:calc(50% - 6px)");
+		expect(html).toContain("cc-day__event--point");
+	});
+});
