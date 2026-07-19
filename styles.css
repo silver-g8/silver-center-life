@@ -774,7 +774,19 @@
 	color: var(--cc-text);
 }
 
-/* The week grid needs more width than the 300px the Day rail gets. */
-.cc-build > .cc-day:has(.cc-week) {
-	flex: 1 1 420px;
+/* Week mode restacks the Build tab: seven columns need the full width, so the
+   calendar takes the whole row and the feeds move BELOW it rather than being
+   squeezed off-screen. Day mode keeps the original side-by-side split. */
+.cc-build:has(.cc-week) {
+	flex-direction: column;
+	height: auto;
+}
+
+.cc-build:has(.cc-week) > .cc-day {
+	flex: 0 0 auto;
+}
+
+.cc-build:has(.cc-week) > .cc-feeds {
+	flex: 1 1 auto;
+	min-height: 0;
 }
