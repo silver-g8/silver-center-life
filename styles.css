@@ -379,6 +379,11 @@
 	flex: 0 0 auto;
 	padding: 14px 16px;
 	border-bottom: 1px solid var(--cc-hairline);
+	/* The Day view title is a date now (6b.1), and in the narrow Day card the
+	   title + count + nav + Day/Week no longer fit on one line. Wrapping the
+	   ROW drops the controls to a second line; without this the title itself
+	   wrapped, splitting the date as "2026-" / "07-17". */
+	flex-wrap: wrap;
 }
 
 .cc-feed__title {
@@ -386,6 +391,8 @@
 	font-size: 13px;
 	font-weight: 600;
 	letter-spacing: 0.01em;
+	/* A date must never break mid-token — see the note above. */
+	white-space: nowrap;
 }
 
 .cc-feed__meta {
@@ -690,8 +697,10 @@
 	min-width: 0;
 }
 
-/* A <button> since 6b.1 — clicking it opens that day. The reset is what keeps
-   it looking like the plain label it was before it became clickable. */
+/* A <button> since 6b.1 — clicking it opens that day. Obsidian styles bare
+   <button> with its own background, border AND box-shadow, which turned the
+   seven column heads into raised grey slabs across the top of the grid. The
+   reset has to kill appearance and box-shadow too, not just background. */
 .cc-week__colhead {
 	position: absolute;
 	top: -18px;
@@ -702,9 +711,12 @@
 	justify-content: center;
 	gap: 3px;
 	padding: 0;
+	appearance: none;
+	-webkit-appearance: none;
 	background: transparent;
 	border: 0;
 	border-radius: 3px;
+	box-shadow: none;
 	font-family: inherit;
 	font-size: 10px;
 	color: var(--cc-text-dim);
