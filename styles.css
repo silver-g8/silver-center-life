@@ -697,11 +697,26 @@
 	min-width: 0;
 }
 
-/* A <button> since 6b.1 — clicking it opens that day. Obsidian styles bare
-   <button> with its own background, border AND box-shadow, which turned the
-   seven column heads into raised grey slabs across the top of the grid. The
-   reset has to kill appearance and box-shadow too, not just background. */
-.cc-week__colhead {
+/* A <button> since 6b.1 — clicking it opens that day, which drags in
+   Obsidian's own button skin and turned the seven column heads into raised
+   grey slabs across the top of the grid.
+
+   Written as `.cc-week__col .cc-week__colhead` (0-2-0) ON PURPOSE: a single
+   class (0-1-0) loses to Obsidian's button rule. Measured, not guessed —
+   getComputedStyle on the head with the 0-1-0 reset in place reported
+
+       background-color: rgb(54,54,54)   <- ours lost
+       box-shadow:       <5-layer stack> <- ours lost
+       padding-derived height: 30px      <- ours lost
+       border-width: 0px                 <- ours WON
+
+   One rule, one specificity, mixed results: Obsidian sets background,
+   box-shadow and padding on a bare <button> but not border, so only the
+   properties it names are contested. Any bare <button> in this plugin that
+   must NOT look like an Obsidian button needs two classes to land. The
+   Day/Week and nav pills are wearing that same skin — they are left alone
+   only because a button is what they are meant to look like. */
+.cc-week__col .cc-week__colhead {
 	position: absolute;
 	top: -18px;
 	left: 0;
@@ -723,7 +738,7 @@
 	cursor: pointer;
 }
 
-.cc-week__colhead:hover {
+.cc-week__col .cc-week__colhead:hover {
 	background: var(--cc-glass);
 	color: var(--cc-text);
 }
