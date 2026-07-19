@@ -26,7 +26,7 @@ import type {
 	RedditItem,
 	TweetItem,
 } from "./data-sources/feeds";
-import { CALENDAR_PATH, loadCalendar } from "./data-sources/calendar";
+import { CALENDAR_PATH, loadCalendar, toISODate } from "./data-sources/calendar";
 import type { CalEvent } from "./data-sources/calendar";
 
 /* `id` is the storage key — phase 5 writes command-center/todos/{id}.md.
@@ -301,8 +301,21 @@ function minToTop(min: number): number {
 	return ((min - RAIL_START_MIN) / 60) * HOUR_PX;
 }
 
-function DayView({ events, now }: { events: CalEvent[]; now: number }) {
+function DayView({
+	events: allEvents,
+	now,
+}: {
+	events: CalEvent[];
+	now: number;
+}) {
 	const railPx = minToTop(RAIL_END_MIN); // total rail height in px
+
+	/* calendar.md can now hold several days under "## YYYY-MM-DD" headings, so
+	   this rail — which is one day tall — has to take its own slice. Derived
+	   from `now`, so crossing midnight with the view open rolls it over on the
+	   next tick instead of stranding yesterday on screen. */
+	const today = toISODate(new Date(now));
+	const events = allEvents.filter((ev) => ev.date === today);
 
 	const hours: number[] = [];
 	for (let h = RAIL_START_MIN / 60; h <= RAIL_END_MIN / 60; h++) hours.push(h);
